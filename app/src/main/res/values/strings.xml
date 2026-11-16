@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Местячковое</string>
+    <string name="app_name_uralskoe">Уральское</string>
+    <string name="app_name_news">Новости</string>
+    <string name="menu">Меню</string>
+    <string name="refresh">Обновить</string>
+    <string name="all_regions">Все</string>
+    <string name="no_news">Новостей пока нет</string>
+    <string name="error_loading">Не удалось загрузить новости</string>
+    <string name="retry">Повторить</string>
+    <string name="source">Источник</string>
+    <string name="open">Открыть</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="theme_mode">Тема</string>
+    <string name="theme_light">Monet</string>
+    <string name="theme_mono">Ч/Б</string>
+    <string name="notifications">Уведомления</string>
+    <string name="notifications_freq">Частота</string>
+    <string name="freq_instant">Сразу</string>
+    <string name="freq_3h">Дайджест раз в 3 часа</string>
+    <string name="freq_daily">Раз в день</string>
+    <string name="notifications_importance">Важность</string>
+    <string name="importance_emergency">Только ЧС</string>
+    <string name="importance_main">Главные</string>
+    <string name="importance_all">Все</string>
+    <string name="fine_settings">Тонкая настройка</string>
+    <string name="fine_settings_hint">Есть идея, как улучшить приложение? Напишите своё предложение в наш Telegram-канал.</string>
+    <string name="app_label_title">Название на рабочем столе</string>
+    <string name="sources_title">Управление источниками</string>
+    <string name="notifications_region">Регион уведомлений</string>
+    <string name="notifications_disabled">Уведомления отключены</string>
+    <string name="add_source">Добавить источник</string>
+    <string name="about">О приложении</string>
+    <string name="about_desc">Приложение, собирающее все главные новости Урала в одной ленте</string>
+    <string name="about_by">by CuteTool</string>
+    <string name="about_telegram">Telegram: t.me/cutetool</string>
+    <string name="about_site">Сайт: cutetool.neocities.org</string>
+    <string name="close">Закрыть</string>
+</resources>
