@@ -12,19 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.cutetool.mestyachkovoe.data.ThemeMode
 
-private val MonoLight = lightColorScheme(
-    primary = Color(0xFF111111),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE0E0E0),
-    onPrimaryContainer = Color(0xFF111111),
-    secondary = Color(0xFF444444),
-    background = Color(0xFFFFFFFF),
-    surface = Color(0xFFFFFFFF),
-    surfaceVariant = Color(0xFFF2F2F2),
-    onSurface = Color(0xFF111111),
-    onSurfaceVariant = Color(0xFF444444),
-    outline = Color(0xFF888888)
-)
 private val MonoDark = darkColorScheme(
     primary = Color(0xFFEDEDED),
     onPrimary = Color(0xFF111111),
@@ -39,6 +26,20 @@ private val MonoDark = darkColorScheme(
     outline = Color(0xFF777777)
 )
 
+private val ClassicLight = lightColorScheme(
+    primary = Color(0xFF1565C0),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFD6E4FF),
+    onPrimaryContainer = Color(0xFF001C3A),
+    secondary = Color(0xFF455A64),
+    background = Color(0xFFFFFFFF),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFF2F2F2),
+    onSurface = Color(0xFF111111),
+    onSurfaceVariant = Color(0xFF444444),
+    outline = Color(0xFF888888)
+)
+
 @Composable
 fun MestyachkovoeTheme(
     mode: ThemeMode,
@@ -47,7 +48,8 @@ fun MestyachkovoeTheme(
     val context = LocalContext.current
     val dark = isSystemInDarkTheme()
     val colors = when (mode) {
-        ThemeMode.MONO -> if (dark) MonoDark else MonoLight
+        ThemeMode.MONO -> MonoDark
+        ThemeMode.LIGHT -> ClassicLight
         ThemeMode.MONET -> when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)

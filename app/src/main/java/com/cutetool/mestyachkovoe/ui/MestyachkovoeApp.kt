@@ -3,7 +3,6 @@
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -60,7 +59,14 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         }
     }
 
-    LaunchedEffect(selectedRegion, settings.disabledSources, settings.customSources, settings.smartFilter) {
+    LaunchedEffect(
+        selectedRegion,
+        settings.disabledSources,
+        settings.customSources,
+        settings.smartFilter,
+        settings.filterSvoPolitics,
+        settings.filterAdult
+    ) {
         load()
     }
 
@@ -88,12 +94,13 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
             topBar = {
                 TopAppBar(
                     title = { Text(settings.appLabel.title, fontWeight = FontWeight.SemiBold) },
-                    navigationIcon = {},
-                    actions = {
-                        IconButton(onClick = { load() }) { Icon(Icons.Default.Refresh, contentDescription = "Обновить") }
+                    navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Меню")
                         }
+                    },
+                    actions = {
+                        IconButton(onClick = { load() }) { Icon(Icons.Default.Refresh, contentDescription = "Обновить") }
                     }
                 )
             }
@@ -235,7 +242,7 @@ fun NewsDetailSheet(item: NewsItem, onDismiss: () -> Unit) {
                 item { Divider() }
                 item {
                     Text(
-                        item.content.ifBlank { "Полный текст доступен на сайте источника." },
+                        item.content.ifBlank { "Полный текст новости доступен на сайте источника." },
                         style = MaterialTheme.typography.bodyLarge,
                         lineHeight = 24.sp
                     )
@@ -282,12 +289,15 @@ fun SettingsSheet(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Меню", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        Text("Настройки", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         Divider()
         Text("Тема", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SegButton("Ч/Б", settings.themeMode == ThemeMode.MONO) { onTheme(ThemeMode.MONO) }
-            SegButton("Monet", settings.themeMode == ThemeMode.MONET) { onTheme(ThemeMode.MONET) }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SegButton("Monet", settings.themeMode == ThemeMode.MONET) { onTheme(ThemeMode.MONET) }
+                SegButton("Ч/Б", settings.themeMode == ThemeMode.MONO) { onTheme(ThemeMode.MONO) }
+            }
+            SegButton("Светлая", settings.themeMode == ThemeMode.LIGHT) { onTheme(ThemeMode.LIGHT) }
         }
         Divider()
         Row(
@@ -302,7 +312,7 @@ fun SettingsSheet(
             Column(Modifier.weight(1f)) {
                 Text("Тонкая настройка", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Ярлык, источники и уведомления",
+                    "Источники, уведомления и фильтры",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -322,7 +332,7 @@ fun SettingsSheet(
         }
         Divider()
         Text("О приложении", style = MaterialTheme.typography.titleMedium)
-        Text("Приложение, собирающее все главные новости Урала в одной ленте", style = MaterialTheme.typography.bodyMedium)
+        Text("Приложение, собирающее воедино новости Урала и вашего региона", style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(16.dp))
         Text("by CuteTool", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         Text(
@@ -331,7 +341,7 @@ fun SettingsSheet(
             modifier = Modifier.clickable { openLink(context, "https://t.me/cutetool") }
         )
         Text(
-            "Наш сайт!!",
+            "мой сайт!!",
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.clickable { openLink(context, "https://cutetool.neocities.org") }
         )

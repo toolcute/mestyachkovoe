@@ -1,10 +1,12 @@
-package com.cutetool.mestyachkovoe.ui
+﻿package com.cutetool.mestyachkovoe.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +42,7 @@ fun FineSettingsDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val feeds = Sources.all + settings.customSources
+    var sourcesExpanded by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onClose,
@@ -63,8 +68,8 @@ fun FineSettingsDialog(
                 ) {
                     item {
                         SectionHeader(
-                            "Ярлык на рабочем столе",
-                            "Независимо выберите название и иконку приложения в лаунчере"
+                            "Ярлык и иконка на столе",
+                            "Приложение можно выбрать на рабочем столе"
                         )
                     }
                     item {
@@ -85,7 +90,7 @@ fun FineSettingsDialog(
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             LauncherIcon.entries.forEach { icon ->
                                 RadioRow(
-                                    if (icon == LauncherIcon.NEW) "Новая иконка" else "Предыдущая иконка",
+                                    if (icon == LauncherIcon.NEW) "Новая иконка" else "Прежняя иконка",
                                     settings.launcherIcon == icon
                                 ) {
                                     scope.launch {
@@ -102,44 +107,79 @@ fun FineSettingsDialog(
                     item {
                         SectionHeader(
                             "Умная фильтрация",
-                            "Скрывает СВО, спецоперацию, федеральную повестку и новости соседних регионов"
+                            "Скрывает нерелевантный контент в ленте"
                         )
                     }
                     item {
                         SwitchRow(
                             title = "Фильтровать чужие регионы",
-                            subtitle = "Работает во вкладках конкретных областей",
+                            subtitle = "Скрывать очевидно нерелевантные новости из других областей",
                             checked = settings.smartFilter,
                             onCheckedChange = { scope.launch { settingsRepo.setSmartFilter(it) } }
+                        )
+                    }
+                    item {
+                        SwitchRow(
+                            title = "Фильтровать СВО и политику",
+                            subtitle = "Скрывает новости по ключевым словам и корням (СВО, мобилизация, фронт, ВСУ, БПЛА и т.д.)",
+                            checked = settings.filterSvoPolitics,
+                            onCheckedChange = { scope.launch { settingsRepo.setFilterSvoPolitics(it) } }
+                        )
+                    }
+                    item {
+                        SwitchRow(
+                            title = "Фильтровать контент 18+ / эротику",
+                            subtitle = "Скрывает новости с эротикой и обнажёнкой (бельё, интим, 18+, onlyfans и т.д.)",
+                            checked = settings.filterAdult,
+                            onCheckedChange = { scope.launch { settingsRepo.setFilterAdult(it) } }
                         )
                     }
 
                     item { Divider() }
 
                     item {
-                        SectionHeader(
-                            "Управление источниками",
-                            "Отключайте лишние RSS-ленты или добавляйте свои"
-                        )
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { sourcesExpanded = !sourcesExpanded }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Управление источниками", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "Включить/отключить RSS-ленты и добавить свои (${feeds.size})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                if (sourcesExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null
+                            )
+                        }
                     }
-                    items(feeds, key = { it.url }) { source ->
-                        val isCustom = settings.customSources.any { it.url == source.url }
-                        SourceRow(
-                            source = source,
-                            enabled = source.url !in settings.disabledSources,
-                            onToggle = { enabled ->
-                                scope.launch { settingsRepo.setSourceEnabled(source.url, enabled) }
-                            },
-                            onDelete = if (isCustom) {
-                                { scope.launch { settingsRepo.removeCustomSource(source.url) } }
-                            } else null
-                        )
-                    }
-                    item {
-                        AddSourceForm(
-                            existingUrls = feeds.map { it.url }.toSet(),
-                            settingsRepo = settingsRepo
-                        )
+
+                    if (sourcesExpanded) {
+                        items(feeds, key = { it.url }) { source ->
+                            val isCustom = settings.customSources.any { it.url == source.url }
+                            SourceRow(
+                                source = source,
+                                enabled = source.url !in settings.disabledSources,
+                                onToggle = { enabled ->
+                                    scope.launch { settingsRepo.setSourceEnabled(source.url, enabled) }
+                                },
+                                onDelete = if (isCustom) {
+                                    { scope.launch { settingsRepo.removeCustomSource(source.url) } }
+                                } else null
+                            )
+                        }
+                        item {
+                            AddSourceForm(
+                                existingUrls = feeds.map { it.url }.toSet(),
+                                settingsRepo = settingsRepo
+                            )
+                        }
                     }
 
                     item { Divider() }
@@ -162,12 +202,12 @@ fun FineSettingsDialog(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    "Помогите сделать приложение лучше",
+                                    "Помочь сделать приложение лучше",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    "Есть идея или замечание? Напишите своё предложение в наш Telegram-канал.",
+                                    "Есть идея или вы нашли ошибку — напишите в Telegram-канал.",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                                 TextButton(onClick = { openLink(context, "https://t.me/cutetool") }) {
@@ -264,7 +304,7 @@ private fun AddSourceForm(
     var error by remember { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Своя RSS-ссылка", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Text("Добавить RSS-ленту", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         OutlinedTextField(
             value = url,
             onValueChange = { url = it; error = null },
@@ -300,7 +340,7 @@ private fun AddSourceForm(
                 }
                 if (error == null) {
                     val source = FeedSource(
-                        name = name.trim().ifBlank { "Свой источник" },
+                        name = name.trim().ifBlank { "Мой источник" },
                         url = cleanUrl,
                         region = region
                     )
@@ -353,11 +393,11 @@ private fun NotificationsSection(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader(
             "Уведомления",
-            "Фоновая проверка новостей работает даже при закрытом приложении"
+            "Пуш-уведомления могут работать, пока приложение не выгружено из памяти"
         )
         SwitchRow(
             title = "Уведомлять о новостях",
-            subtitle = "Можно полностью отключить в любой момент",
+            subtitle = "Можно отключить в любой момент",
             checked = settings.notifyEnabled,
             onCheckedChange = { changeNotifications(it) }
         )
@@ -390,7 +430,7 @@ private fun NotificationsSection(
             )
 
             Text(
-                "Android проверяет новости в фоне не чаще раза в 15 минут. Для мгновенных уведомлений разрешите приложению работу в фоне без ограничений.",
+                "Android ограничивает фоновые задачи (минимум ~15 минут). Для надёжных уведомлений держите приложение не выгруженным.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

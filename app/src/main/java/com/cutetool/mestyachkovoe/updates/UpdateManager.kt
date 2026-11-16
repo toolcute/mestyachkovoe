@@ -17,7 +17,8 @@ import java.net.URL
 
 object UpdateManager {
     private const val API_URL = "https://api.github.com/repos/toolcute/mestyachkovoe/releases/latest"
-    private const val USER_AGENT = "Mestyachkovoe"
+    const val RELEASES_URL = "https://github.com/toolcute/mestyachkovoe/releases"
+    private const val USER_AGENT = "Mestyachkovoe-App"
 
     data class UpdateInfo(
         val tag: String,
@@ -29,8 +30,8 @@ object UpdateManager {
 
     fun currentVersion(context: Context): String =
         runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.09"
-        }.getOrDefault("1.09")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.11"
+        }.getOrDefault("1.11")
 
     suspend fun latestRelease(): UpdateInfo? = withContext(Dispatchers.IO) {
         val connection = (URL(API_URL).openConnection() as HttpURLConnection).apply {

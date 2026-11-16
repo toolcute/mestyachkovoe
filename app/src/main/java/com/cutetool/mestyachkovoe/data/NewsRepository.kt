@@ -14,6 +14,7 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.max
 
 class NewsRepository {
     suspend fun load(region: Region, settings: UserSettings? = null): List<NewsItem> = withContext(Dispatchers.IO) {
@@ -30,22 +31,66 @@ class NewsRepository {
             }.awaitAll().flatten()
         }
 
-        val unique = items
+        val sorted = items
             .distinctBy { it.link.ifBlank { it.id } }
             .sortedByDescending { it.published }
 
-        if (settings == null || settings.smartFilter) {
-            unique.filterNot { StopWords.blocks(region, it.title + " " + it.content) }
-        } else {
-            unique
+        val deduped = dedupe(sorted)
+
+        deduped.filterNot { item ->
+            val text = item.title + " " + item.content.take(1200)
+            val smart = settings?.smartFilter ?: true
+            val svo = settings?.filterSvoPolitics ?: true
+            val adult = settings?.filterAdult ?: true
+            (smart && StopWords.blocksRegion(region, text)) ||
+                (svo && StopWords.blocksSvoPolitics(text)) ||
+                (adult && StopWords.blocksAdult(text))
         }
+    }
+
+    private fun dedupe(items: List<NewsItem>): List<NewsItem> {
+        val kept = ArrayList<NewsItem>(items.size)
+        val signatures = ArrayList<Set<String>>(items.size)
+        for (item in items) {
+            val sig = signature(item)
+            var duplicate = false
+            for (existing in signatures) {
+                if (jaccard(sig, existing) >= 0.5) {
+                    duplicate = true
+                    break
+                }
+            }
+            if (!duplicate) {
+                kept.add(item)
+                signatures.add(sig)
+            }
+        }
+        return kept
+    }
+
+    private fun signature(item: NewsItem): Set<String> {
+        val snippet = item.content.take(500)
+        val text = (item.title + " " + snippet).lowercase(Locale.ROOT)
+        return text.split(Regex("[^\\p{L}\\p{N}]+"))
+            .asSequence()
+            .filter { it.length >= 3 }
+            .toSet()
+    }
+
+    private fun jaccard(a: Set<String>, b: Set<String>): Double {
+        if (a.isEmpty() || b.isEmpty()) return 0.0
+        var intersection = 0
+        val (small, large) = if (a.size <= b.size) a to b else b to a
+        for (w in small) if (large.contains(w)) intersection++
+        val union = a.size + b.size - intersection
+        return if (union == 0) 0.0 else intersection.toDouble() / union.toDouble()
     }
 
     private fun fetchFeed(source: FeedSource): List<NewsItem> {
         val conn = (URL(source.url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 8000
-            setRequestProperty("User-Agent", "Mestyachkovoe/1.0")
+            setRequestProperty("User-Agent", "Mestyachkovoe/1.10")
         }
         conn.inputStream.use { stream ->
             return parse(stream, source)

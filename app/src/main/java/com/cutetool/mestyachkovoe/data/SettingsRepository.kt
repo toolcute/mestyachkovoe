@@ -22,6 +22,8 @@ data class UserSettings(
     val appLabel: AppLabel = AppLabel.MESTYACHKOVOE,
     val launcherIcon: LauncherIcon = LauncherIcon.NEW,
     val smartFilter: Boolean = true,
+    val filterSvoPolitics: Boolean = true,
+    val filterAdult: Boolean = true,
     val disabledSources: Set<String> = emptySet(),
     val customSources: List<FeedSource> = emptyList(),
 )
@@ -36,6 +38,8 @@ class SettingsRepository(private val context: Context) {
         val APP_LABEL = stringPreferencesKey("app_label")
         val LAUNCHER_ICON = stringPreferencesKey("launcher_icon")
         val SMART_FILTER = booleanPreferencesKey("smart_filter")
+        val FILTER_SVO = booleanPreferencesKey("filter_svo_politics")
+        val FILTER_ADULT = booleanPreferencesKey("filter_adult")
         val DISABLED = stringSetPreferencesKey("disabled_sources")
         val CUSTOM = stringPreferencesKey("custom_sources")
     }
@@ -45,7 +49,6 @@ class SettingsRepository(private val context: Context) {
         UserSettings(
             themeMode = when (rawTheme) {
                 null -> ThemeMode.MONET
-                "LIGHT" -> ThemeMode.MONET
                 else -> runCatching { ThemeMode.valueOf(rawTheme) }.getOrDefault(ThemeMode.MONET)
             },
             notifyEnabled = p[Keys.NOTIFY_ENABLED] ?: false,
@@ -55,6 +58,8 @@ class SettingsRepository(private val context: Context) {
             appLabel = runCatching { AppLabel.valueOf(p[Keys.APP_LABEL] ?: "") }.getOrDefault(AppLabel.MESTYACHKOVOE),
             launcherIcon = runCatching { LauncherIcon.valueOf(p[Keys.LAUNCHER_ICON] ?: "") }.getOrDefault(LauncherIcon.NEW),
             smartFilter = p[Keys.SMART_FILTER] ?: true,
+            filterSvoPolitics = p[Keys.FILTER_SVO] ?: true,
+            filterAdult = p[Keys.FILTER_ADULT] ?: true,
             disabledSources = p[Keys.DISABLED].orEmpty(),
             customSources = decodeSources(p[Keys.CUSTOM]),
         )
@@ -68,6 +73,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAppLabel(label: AppLabel) { context.dataStore.edit { it[Keys.APP_LABEL] = label.name } }
     suspend fun setLauncherIcon(icon: LauncherIcon) { context.dataStore.edit { it[Keys.LAUNCHER_ICON] = icon.name } }
     suspend fun setSmartFilter(enabled: Boolean) { context.dataStore.edit { it[Keys.SMART_FILTER] = enabled } }
+    suspend fun setFilterSvoPolitics(enabled: Boolean) { context.dataStore.edit { it[Keys.FILTER_SVO] = enabled } }
+    suspend fun setFilterAdult(enabled: Boolean) { context.dataStore.edit { it[Keys.FILTER_ADULT] = enabled } }
 
     suspend fun setSourceEnabled(url: String, enabled: Boolean) {
         context.dataStore.edit { p ->

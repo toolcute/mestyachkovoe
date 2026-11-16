@@ -13,17 +13,17 @@ enum class Region(val title: String) {
     ORENBURG("Оренбургская")
 }
 
-enum class ThemeMode(val title: String) { MONO("Ч/Б"), MONET("Monet") }
+enum class ThemeMode(val title: String) { MONET("Monet"), MONO("Ч/Б (Тёмная)"), LIGHT("Светлая") }
 
 enum class NotifyFrequency(val title: String, val intervalMinutes: Long) {
-    INSTANT("Сразу (каждые 15 минут)", 15),
+    INSTANT("Сразу (примерно 15 минут)", 15),
     DIGEST_3H("Дайджест раз в 3 часа", 180),
     DAILY("Раз в день", 1440)
 }
 
 enum class NotifyImportance(val title: String) {
     EMERGENCY("Только ЧС"),
-    MAIN("Главные"),
+    MAIN("Главное"),
     ALL("Все")
 }
 
@@ -35,7 +35,7 @@ enum class AppLabel(val title: String, val baseAlias: String) {
 
 enum class LauncherIcon(val title: String) {
     NEW("Новая"),
-    OLD("Предыдущая")
+    OLD("Прежняя")
 }
 
 data class NewsItem(
