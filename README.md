@@ -1,68 +1,30 @@
-# Местячковое
+# 📱 Местячковое
 
-Android-приложение с региональными новостями Урала на Kotlin и Jetpack Compose.
+**Все важные новости Урала в единой ленте!!**  
+Лёгкое и удобное Android-приложение для чтения региональных новостей УрФО.
+<img width="3000" height="4000" alt="Picsart_26-11-16_22-18-18-445" src="https://github.com/user-attachments/assets/b3ef8516-8044-4ad4-bed7-622f28c4e900" /> <img width="3000" height="4000" alt="Picsart_26-11-16_22-18-37-749" src="https://github.com/user-attachments/assets/c26e9e87-fff8-4eb7-8a81-0b46644cd0de" /> <img width="3000" height="4000" alt="Picsart_26-11-16_22-18-55-412" src="https://github.com/user-attachments/assets/0f287d72-ea5c-470a-8ee4-e001f3bb232f" /> <img width="3000" height="4000" alt="Picsart_26-11-16_22-19-21-562" src="https://github.com/user-attachments/assets/32643420-61a4-4320-a0ca-93758c45385c" />
 
-Текущая версия: `1.09` (`versionCode = 109`).
+---
 
-## Сборка
+## ✨ Основные возможности
 
-```powershell
-.\gradlew.bat assembleDebug
-```
+* **Рег.фильтрация!** Я попытался изолировать новости других областей и назойливой фед. повесточки. Только то, что происходит у вас дома на Урале.
+* **Умные стоп-слова:** Автоматический фильтр скрывает нежелательные новости и упоминания соседних регионов. Ну или попытка это реализовать..
+* **Bottom Sheet:** Читайте полные тексты новостей прямо в приложении, не открывая лишний раз браузер.
+* **Кастомизация интерфейса:** Переключение тем оформления, выбор названий и иконки приложения на рабочем столе.
+* **Фоновые уведомления:** Гибкая настройка оповещений по регионам(!) и важности новостей.
+* **Автообновление:** Приложение само проверяет релизы на GitHub и обновляется по воздуху начиная с версии **v1.09**.
 
-Готовый APK: `app\build\outputs\apk\debug\app-debug.apk`.
+---
 
-## Иконки приложения
+## 📥 Скачайте!!!
 
-Новая основная иконка (по умолчанию) генерируется из:
+Последнюю стабильную версию (`v1.09`) всегда можно скачать в разделе **[Releases](https://github.com/toolcute/mestyachkovoe/releases/latest)**. 
 
-```
-C:\CuteDroid\UraliconMya.png
-```
+1. Скачайте свеженький apk файлик.
+2. Разрешите установку из неизвестных источников на вашем смартфоне.
+3. Пользуйтесь с удовольствием!
 
-Предыдущая иконка:
+---
+Шпашибо всем за все, за что не сказал спасибо
 
-```
-C:\CuteDroid\IconMes.png
-```
-
-Перегенерация новой иконки по умолчанию:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\generate_icons.ps1
-```
-
-Перегенерация предыдущей иконки:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\generate_icons.ps1 -Source "C:\CuteDroid\IconMes.png" -Prefix "ic_launcher_old"
-```
-
-Скрипт создаёт `ic_launcher*.png` в `app\src\main\res\mipmap-*`, включая
-adaptive foreground и монохромный слой для Material You. Путь к исходнику можно
-передать параметром `-Source`.
-
-В приложении название и иконка ярлыка выбираются независимо через
-`activity-alias` в `AndroidManifest.xml` (3 названия × 2 иконки).
-
-## Обновления
-
-Проверка обновлений использует GitHub Releases:
-
-```
-https://api.github.com/repos/toolcute/mestyachkovoe/releases/latest
-```
-
-При наличии более нового тега приложение скачивает APK из релиза и открывает
-системный установщик Android. Для установки нужно разрешение «Установка
-неизвестных приложений» для Местячкового.
-
-## Публикация релиза
-
-```powershell
-gh auth login
-gh repo create toolcute/mestyachkovoe --public --source . --remote origin --push
-git tag v1.09
-git push origin v1.09
-gh release create v1.09 "app\build\outputs\apk\debug\app-debug.apk" --title "v1.09" --notes "Первый релиз Местячкового"
-```
