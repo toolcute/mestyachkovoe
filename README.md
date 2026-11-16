@@ -19,7 +19,7 @@
 
 ## 📥 Скачайте!!!
 
-Последнюю стабильную версию (`v1.09`) всегда можно скачать в разделе **[Releases](https://github.com/toolcute/mestyachkovoe/releases/latest)**. 
+Последнюю стабильную версию (`v1.11`) всегда можно скачать в разделе **[Releases](https://github.com/toolcute/mestyachkovoe/releases/latest)**. 
 
 1. Скачайте свеженький apk файлик.
 2. Разрешите установку из неизвестных источников на вашем смартфоне.
