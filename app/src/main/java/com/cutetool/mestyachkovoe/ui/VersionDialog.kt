@@ -16,12 +16,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -183,16 +182,21 @@ fun VersionDialog(onClose: () -> Unit) {
                         }
                     }
                     Surface(
+                        onClick = onClose,
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.tertiaryContainer
                     ) {
-                        Text(
-                            "MD3",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
+                        Box(
+                            Modifier.size(38.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Закрыть",
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
@@ -256,7 +260,7 @@ fun VersionDialog(onClose: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        ExpressiveLoadingIndicator(size = 20.dp)
                         Text("Загружаем ченжлог…", style = MaterialTheme.typography.bodyMedium)
                     }
 
@@ -289,14 +293,6 @@ fun VersionDialog(onClose: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Проверить обновления")
-                }
-                TextButton(
-                    onClick = { openLink(context, UpdateManager.RELEASES_URL) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Открыть Releases на GitHub")
                 }
                 OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) {
                     Text("Закрыть")
@@ -528,7 +524,7 @@ private fun StatusRow(text: String) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+        ExpressiveLoadingIndicator(size = 20.dp)
         Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }

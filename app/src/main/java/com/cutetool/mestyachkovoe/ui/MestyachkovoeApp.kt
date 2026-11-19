@@ -13,9 +13,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
@@ -43,7 +46,6 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     val scope = rememberCoroutineScope()
     val repo = remember { NewsRepository() }
     val freshInstall = remember { isFreshInstall(context) }
-    var selectedDistrict by remember { mutableStateOf(settings.federalDistrict) }
     var selectedRegion by remember { mutableStateOf(Region.ALL) }
     var items by remember { mutableStateOf<List<NewsItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -54,10 +56,11 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     var searchOpen by remember { mutableStateOf(false) }
     var updateIntroOpen by remember { mutableStateOf(false) }
     var districtPickerOpen by remember { mutableStateOf(false) }
+    var cuteToolOpen by remember { mutableStateOf(false) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
 
     LaunchedEffect(settings.federalDistrict) {
-        selectedDistrict = settings.federalDistrict
+        selectedRegion = Region.ALL
     }
 
     LaunchedEffect(Unit) {
@@ -83,7 +86,7 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
             try {
                 items = repo.load(
                     region = selectedRegion,
-                    settings = settings.copy(federalDistrict = selectedDistrict)
+                    settings = settings
                 )
             } catch (e: Exception) {
                 error = e.message ?: "error"
@@ -94,7 +97,7 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
 
     LaunchedEffect(
         selectedRegion,
-        selectedDistrict,
+        settings.federalDistrict,
         settings.disabledSources,
         settings.customSources,
         settings.smartFilter,
@@ -118,6 +121,14 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
                     onVersion = {
                         scope.launch { drawerState.close() }
                         versionDialogOpen = true
+                    },
+                    onDistrict = {
+                        scope.launch { drawerState.close() }
+                        districtPickerOpen = true
+                    },
+                    onCuteTool = {
+                        scope.launch { drawerState.close() }
+                        cuteToolOpen = true
                     },
                     onClose = { scope.launch { drawerState.close() } }
                 )
@@ -145,21 +156,17 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
             }
         ) { padding ->
             Column(Modifier.padding(padding)) {
-                DistrictChips(
-                    selected = selectedDistrict,
-                    onSelect = {
-                        selectedDistrict = it
-                        selectedRegion = Region.ALL
-                    }
-                )
                 RegionChips(
-                    district = selectedDistrict,
+                    district = settings.federalDistrict,
                     selected = selectedRegion,
                     onSelect = { selectedRegion = it }
                 )
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     when {
-                        loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                        loading -> ExpressiveLoadingIndicator(
+                            modifier = Modifier.align(Alignment.Center),
+                            size = 64.dp
+                        )
                         error != null -> ErrorState(onRetry = { load() })
                         items.isEmpty() -> Text("Новостей пока нет", Modifier.align(Alignment.Center))
                         else -> NewsList(items = items, onItemClick = { selectedNews = it })
@@ -209,24 +216,9 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
             onDismiss = { districtPickerOpen = false }
         )
     }
-}
 
-@Composable
-fun DistrictChips(selected: FederalDistrict, onSelect: (FederalDistrict) -> Unit) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(FederalDistrict.entries.filter { it.selectable }) { district ->
-            FilterChip(
-                selected = district == selected,
-                onClick = { onSelect(district) },
-                label = { Text(district.title, maxLines = 1) },
-                leadingIcon = if (district == selected) {
-                    { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                } else null
-            )
-        }
+    if (cuteToolOpen) {
+        CuteToolDialog(onClose = { cuteToolOpen = false })
     }
 }
 
@@ -399,9 +391,10 @@ fun SettingsSheet(
     onTheme: (ThemeMode) -> Unit,
     onFineSettings: () -> Unit,
     onVersion: () -> Unit,
+    onDistrict: () -> Unit,
+    onCuteTool: () -> Unit,
     onClose: () -> Unit
 ) {
-    val context = LocalContext.current
     Column(
         Modifier
             .fillMaxHeight()
@@ -432,7 +425,7 @@ fun SettingsSheet(
             Column(Modifier.weight(1f)) {
                 Text("Тонкая настройка", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Округ, источники, уведомления и фильтры",
+                    "Источники, уведомления и фильтры",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -451,30 +444,100 @@ fun SettingsSheet(
             Text("Версия приложения", style = MaterialTheme.typography.titleMedium)
         }
         Divider()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onDistrict)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Public, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("ФедОкруг ленты", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    settings.federalDistrict.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onCuteTool)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Text("by CuteTool", style = MaterialTheme.typography.titleMedium)
+        }
+        Divider()
         Text("О приложении", style = MaterialTheme.typography.titleMedium)
         Text(
             "Местячковое — агрегатор региональных новостей России. Собирает новости выбранного федерального округа в одну удобную ленту.",
             style = MaterialTheme.typography.bodyMedium
         )
-        Spacer(Modifier.height(16.dp))
-        Text("by CuteTool", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-        Text(
-            "telegram",
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { openLink(context, "https://t.me/cutetool") }
-        )
-        Text(
-            "мой сайт!!",
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { openLink(context, "https://cutetool.neocities.org") }
-        )
-        Text(
-            "мой новостной сайт «Местечко»",
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { openLink(context, "https://toolcute.github.io/Mestechko/") }
-        )
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Закрыть") }
+    }
+}
+
+@Composable
+fun CuteToolDialog(onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("by CuteTool", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                CuteToolLink(
+                    title = "Telegram канал",
+                    url = "https://t.me/cutetool",
+                    onOpen = onClose
+                )
+                CuteToolLink(
+                    title = "Мой сайт!!",
+                    url = "https://cutetool.neocities.org",
+                    onOpen = onClose
+                )
+                CuteToolLink(
+                    title = "Новости «Местечко»",
+                    url = "https://toolcute.github.io/Mestechko/",
+                    onOpen = onClose
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text("Закрыть") }
+        }
+    )
+}
+
+@Composable
+private fun CuteToolLink(title: String, url: String, onOpen: () -> Unit) {
+    val context = LocalContext.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable {
+                openLink(context, url)
+                onOpen()
+            }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 

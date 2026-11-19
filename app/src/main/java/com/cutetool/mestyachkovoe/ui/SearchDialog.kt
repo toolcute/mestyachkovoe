@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -180,7 +179,10 @@ fun SearchDialog(
                     Spacer(Modifier.height(12.dp))
                     Box(Modifier.fillMaxWidth().weight(1f)) {
                         when {
-                            loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                            loading -> ExpressiveLoadingIndicator(
+                                modifier = Modifier.align(Alignment.Center),
+                                size = 56.dp
+                            )
                             error != null -> Column(
                                 Modifier.align(Alignment.Center),
                                 horizontalAlignment = Alignment.CenterHorizontally

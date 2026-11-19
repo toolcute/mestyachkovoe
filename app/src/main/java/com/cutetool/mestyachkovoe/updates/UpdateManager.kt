@@ -38,8 +38,8 @@ object UpdateManager {
 
     fun currentVersion(context: Context): String =
         runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.15"
-        }.getOrDefault("1.15")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.16"
+        }.getOrDefault("1.16")
 
     suspend fun latestRelease(): UpdateInfo? = withContext(Dispatchers.IO) {
         val connection = (URL(API_URL).openConnection() as HttpURLConnection).apply {

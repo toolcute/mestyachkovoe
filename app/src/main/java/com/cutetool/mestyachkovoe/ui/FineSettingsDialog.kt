@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +44,6 @@ fun FineSettingsDialog(
     val scope = rememberCoroutineScope()
     val feeds = Sources.all + settings.customSources
     var sourcesExpanded by remember { mutableStateOf(false) }
-    var districtPickerOpen by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onClose,
@@ -69,48 +67,6 @@ fun FineSettingsDialog(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    item {
-                        SectionHeader(
-                            "Регион ленты",
-                            "Источники и фильтры подстраиваются под федеральный округ"
-                        )
-                    }
-                    item {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { districtPickerOpen = true }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.Public,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "Федеральный округ",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    settings.federalDistrict.title,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Text(
-                                "Изменить",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-
-                    item { Divider() }
-
                     item {
                         SectionHeader(
                             "Ярлык и иконка на столе",
@@ -266,14 +222,6 @@ fun FineSettingsDialog(
                 }
             }
         }
-    }
-
-    if (districtPickerOpen) {
-        DistrictPickerDialog(
-            current = settings.federalDistrict,
-            onSelect = { scope.launch { settingsRepo.setFederalDistrict(it) } },
-            onDismiss = { districtPickerOpen = false }
-        )
     }
 }
 

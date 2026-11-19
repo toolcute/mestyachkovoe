@@ -105,7 +105,7 @@ fun OnboardingScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Выберите федеральный округ — лента и источники настроятся под него. Позже округ можно изменить в «Тонкой настройке».",
+                "Выберите федеральный округ — лента и источники настроятся под него. Позже округ можно изменить в настройках.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -136,7 +136,7 @@ fun OnboardingScreen(
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "Это можно изменить в любой момент в тонких настройках.",
+                "Это можно изменить в любой момент в настройках.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -226,7 +226,7 @@ fun UpdateIntroDialog(
                     color = MaterialTheme.colorScheme.tertiaryContainer
                 ) {
                     Text(
-                        "Обновление 1.15",
+                        "Что нового",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -244,7 +244,7 @@ fun UpdateIntroDialog(
                 )
                 HighlightRow("Новые регионы", "Центральная Россия, Приволжье, Сибирь и Подмосковье")
                 HighlightRow("Поиск", "Ищите новости по всей России по кнопке-лупе")
-                HighlightRow("Где изменить", "Тонкая настройка → Федеральный округ")
+                HighlightRow("Где изменить", "Настройки → ФедОкруг ленты")
                 Spacer(Modifier.height(4.dp))
                 Button(onClick = onKeepUral, modifier = Modifier.fillMaxWidth()) {
                     Text("Оставить Урал")

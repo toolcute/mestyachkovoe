@@ -105,7 +105,7 @@ class NewsRepository {
         val conn = (URL(source.url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 8000
-            setRequestProperty("User-Agent", "Mestyachkovoe/1.15")
+            setRequestProperty("User-Agent", "Mestyachkovoe/1.16")
         }
         conn.inputStream.use { stream ->
             return parse(stream, source)
