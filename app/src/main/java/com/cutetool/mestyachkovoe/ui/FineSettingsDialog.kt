@@ -13,10 +13,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +45,7 @@ fun FineSettingsDialog(
     val scope = rememberCoroutineScope()
     val feeds = Sources.all + settings.customSources
     var sourcesExpanded by remember { mutableStateOf(false) }
+    var districtPickerOpen by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onClose,
@@ -66,6 +69,48 @@ fun FineSettingsDialog(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    item {
+                        SectionHeader(
+                            "Регион ленты",
+                            "Источники и фильтры подстраиваются под федеральный округ"
+                        )
+                    }
+                    item {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { districtPickerOpen = true }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Public,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Федеральный округ",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    settings.federalDistrict.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Text(
+                                "Изменить",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    item { Divider() }
+
                     item {
                         SectionHeader(
                             "Ярлык и иконка на столе",
@@ -177,7 +222,8 @@ fun FineSettingsDialog(
                         item {
                             AddSourceForm(
                                 existingUrls = feeds.map { it.url }.toSet(),
-                                settingsRepo = settingsRepo
+                                settingsRepo = settingsRepo,
+                                defaultDistrict = settings.federalDistrict
                             )
                         }
                     }
@@ -220,6 +266,14 @@ fun FineSettingsDialog(
                 }
             }
         }
+    }
+
+    if (districtPickerOpen) {
+        DistrictPickerDialog(
+            current = settings.federalDistrict,
+            onSelect = { scope.launch { settingsRepo.setFederalDistrict(it) } },
+            onDismiss = { districtPickerOpen = false }
+        )
     }
 }
 
@@ -274,9 +328,26 @@ private fun SourceRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
-            Text(source.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    source.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (source.verified) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Проверенный источник",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
             Text(
-                "${source.region.title} • ${source.url}",
+                "${source.district.title} • ${source.url}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -295,7 +366,8 @@ private fun SourceRow(
 @Composable
 private fun AddSourceForm(
     existingUrls: Set<String>,
-    settingsRepo: SettingsRepository
+    settingsRepo: SettingsRepository,
+    defaultDistrict: FederalDistrict
 ) {
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
@@ -342,7 +414,8 @@ private fun AddSourceForm(
                     val source = FeedSource(
                         name = name.trim().ifBlank { "Мой источник" },
                         url = cleanUrl,
-                        region = region
+                        region = region,
+                        district = if (region == Region.ALL) defaultDistrict else region.district
                     )
                     scope.launch {
                         settingsRepo.addCustomSource(source)

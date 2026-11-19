@@ -28,10 +28,18 @@ object UpdateManager {
         val notes: String,
     )
 
+    data class ReleaseNote(
+        val tag: String,
+        val name: String,
+        val notes: String,
+        val publishedAt: String,
+        val releaseUrl: String,
+    )
+
     fun currentVersion(context: Context): String =
         runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.11"
-        }.getOrDefault("1.11")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.15"
+        }.getOrDefault("1.15")
 
     suspend fun latestRelease(): UpdateInfo? = withContext(Dispatchers.IO) {
         val connection = (URL(API_URL).openConnection() as HttpURLConnection).apply {
@@ -71,6 +79,35 @@ object UpdateManager {
                 releaseUrl = json.optString("html_url"),
                 notes = json.optString("body"),
             )
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    suspend fun recentReleases(limit: Int = 6): List<ReleaseNote> = withContext(Dispatchers.IO) {
+        val connection = (URL("https://api.github.com/repos/toolcute/mestyachkovoe/releases?per_page=$limit").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 12000
+            readTimeout = 12000
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("User-Agent", USER_AGENT)
+        }
+        try {
+            val code = connection.responseCode
+            if (code !in 200..299) throw IOException("GitHub API вернул код $code")
+            val raw = connection.inputStream.bufferedReader().use { it.readText() }
+            val array = org.json.JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                val json = array.optJSONObject(index) ?: return@mapNotNull null
+                val tag = json.optString("tag_name").trim()
+                if (tag.isBlank()) return@mapNotNull null
+                ReleaseNote(
+                    tag = tag,
+                    name = json.optString("name").ifBlank { tag },
+                    notes = json.optString("body").trim(),
+                    publishedAt = json.optString("published_at"),
+                    releaseUrl = json.optString("html_url").ifBlank { RELEASES_URL },
+                )
+            }
         } finally {
             connection.disconnect()
         }

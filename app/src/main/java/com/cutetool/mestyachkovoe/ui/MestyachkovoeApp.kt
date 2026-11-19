@@ -1,5 +1,6 @@
 ﻿package com.cutetool.mestyachkovoe.ui
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
@@ -12,9 +13,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,8 +39,11 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val repo = remember { NewsRepository() }
+    val freshInstall = remember { isFreshInstall(context) }
+    var selectedDistrict by remember { mutableStateOf(settings.federalDistrict) }
     var selectedRegion by remember { mutableStateOf(Region.ALL) }
     var items by remember { mutableStateOf<List<NewsItem>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -45,13 +51,40 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     var selectedNews by remember { mutableStateOf<NewsItem?>(null) }
     var fineSettingsOpen by remember { mutableStateOf(false) }
     var versionDialogOpen by remember { mutableStateOf(false) }
+    var searchOpen by remember { mutableStateOf(false) }
+    var updateIntroOpen by remember { mutableStateOf(false) }
+    var districtPickerOpen by remember { mutableStateOf(false) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+
+    LaunchedEffect(settings.federalDistrict) {
+        selectedDistrict = settings.federalDistrict
+    }
+
+    LaunchedEffect(Unit) {
+        if (!freshInstall && !settings.onboardingDone) {
+            settingsRepo.completeOnboarding(settings.federalDistrict)
+            updateIntroOpen = true
+        }
+    }
+
+    if (!settings.onboardingDone && freshInstall) {
+        OnboardingScreen(
+            initialDistrict = settings.federalDistrict,
+            onContinue = { district ->
+                scope.launch { settingsRepo.completeOnboarding(district) }
+            }
+        )
+        return
+    }
 
     fun load() {
         scope.launch {
             loading = true; error = null
             try {
-                items = repo.load(selectedRegion, settings)
+                items = repo.load(
+                    region = selectedRegion,
+                    settings = settings.copy(federalDistrict = selectedDistrict)
+                )
             } catch (e: Exception) {
                 error = e.message ?: "error"
             }
@@ -61,6 +94,7 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
 
     LaunchedEffect(
         selectedRegion,
+        selectedDistrict,
         settings.disabledSources,
         settings.customSources,
         settings.smartFilter,
@@ -100,14 +134,30 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { load() }) { Icon(Icons.Default.Refresh, contentDescription = "Обновить") }
+                        IconButton(onClick = { searchOpen = true }) {
+                            Icon(Icons.Default.Search, contentDescription = "Поиск по новостям")
+                        }
+                        IconButton(onClick = { load() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                        }
                     }
                 )
             }
         ) { padding ->
             Column(Modifier.padding(padding)) {
-                RegionChips(selected = selectedRegion, onSelect = { selectedRegion = it })
-                Box(Modifier.fillMaxSize()) {
+                DistrictChips(
+                    selected = selectedDistrict,
+                    onSelect = {
+                        selectedDistrict = it
+                        selectedRegion = Region.ALL
+                    }
+                )
+                RegionChips(
+                    district = selectedDistrict,
+                    selected = selectedRegion,
+                    onSelect = { selectedRegion = it }
+                )
+                Box(Modifier.fillMaxWidth().weight(1f)) {
                     when {
                         loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                         error != null -> ErrorState(onRetry = { load() })
@@ -131,18 +181,71 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         )
     }
 
+    if (searchOpen) {
+        SearchDialog(
+            onClose = { searchOpen = false },
+            onOpenNews = { selectedNews = it }
+        )
+    }
+
     if (versionDialogOpen) {
         VersionDialog(onClose = { versionDialogOpen = false })
+    }
+
+    if (updateIntroOpen) {
+        UpdateIntroDialog(
+            onKeepUral = { updateIntroOpen = false },
+            onChooseDistrict = {
+                updateIntroOpen = false
+                districtPickerOpen = true
+            }
+        )
+    }
+
+    if (districtPickerOpen) {
+        DistrictPickerDialog(
+            current = settings.federalDistrict,
+            onSelect = { scope.launch { settingsRepo.setFederalDistrict(it) } },
+            onDismiss = { districtPickerOpen = false }
+        )
     }
 }
 
 @Composable
-fun RegionChips(selected: Region, onSelect: (Region) -> Unit) {
+fun DistrictChips(selected: FederalDistrict, onSelect: (FederalDistrict) -> Unit) {
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(Region.entries) { region ->
+        items(FederalDistrict.entries.filter { it.selectable }) { district ->
+            FilterChip(
+                selected = district == selected,
+                onClick = { onSelect(district) },
+                label = { Text(district.title, maxLines = 1) },
+                leadingIcon = if (district == selected) {
+                    { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                } else null
+            )
+        }
+    }
+}
+
+@Composable
+fun RegionChips(district: FederalDistrict, selected: Region, onSelect: (Region) -> Unit) {
+    val regions = district.regions
+    if (regions.size <= 1) return
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = selected == Region.ALL,
+                onClick = { onSelect(Region.ALL) },
+                label = { Text(Region.ALL.title) }
+            )
+        }
+        items(regions) { region ->
             FilterChip(
                 selected = region == selected,
                 onClick = { onSelect(region) },
@@ -150,6 +253,7 @@ fun RegionChips(selected: Region, onSelect: (Region) -> Unit) {
             )
         }
     }
+    Spacer(Modifier.height(6.dp))
 }
 
 @Composable
@@ -158,7 +262,7 @@ fun NewsList(items: List<NewsItem>, onItemClick: (NewsItem) -> Unit) {
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(items, key = { it.id + it.published }) { item ->
+        items(items, key = { it.id + it.published + it.title }) { item ->
             NewsCard(item = item, onClick = { onItemClick(item) })
         }
     }
@@ -184,6 +288,14 @@ fun NewsCard(item: NewsItem, onClick: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(item.source, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    if (item.sourceVerified) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Проверенный источник",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                     Text("•", style = MaterialTheme.typography.bodySmall)
                     Text(formatTime(item.published), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -233,6 +345,14 @@ fun NewsDetailSheet(item: NewsItem, onDismiss: () -> Unit) {
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(item.source, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        if (item.sourceVerified) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Проверенный источник",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                         Text("•", style = MaterialTheme.typography.bodySmall)
                         Text(item.region.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("•", style = MaterialTheme.typography.bodySmall)
@@ -312,7 +432,7 @@ fun SettingsSheet(
             Column(Modifier.weight(1f)) {
                 Text("Тонкая настройка", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Источники, уведомления и фильтры",
+                    "Округ, источники, уведомления и фильтры",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -332,7 +452,10 @@ fun SettingsSheet(
         }
         Divider()
         Text("О приложении", style = MaterialTheme.typography.titleMedium)
-        Text("Приложение, собирающее воедино новости Урала и вашего региона", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "Местячковое — агрегатор региональных новостей России. Собирает новости выбранного федерального округа в одну удобную ленту.",
+            style = MaterialTheme.typography.bodyMedium
+        )
         Spacer(Modifier.height(16.dp))
         Text("by CuteTool", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         Text(
@@ -344,6 +467,11 @@ fun SettingsSheet(
             "мой сайт!!",
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.clickable { openLink(context, "https://cutetool.neocities.org") }
+        )
+        Text(
+            "мой новостной сайт «Местечко»",
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable { openLink(context, "https://toolcute.github.io/Mestechko/") }
         )
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Закрыть") }
@@ -378,6 +506,13 @@ internal fun formatTime(ts: Long): String {
         else -> SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()).format(Date(ts))
     }
 }
+
+@Suppress("DEPRECATION")
+private fun isFreshInstall(context: Context): Boolean = runCatching {
+    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+    val delta = info.lastUpdateTime - info.firstInstallTime
+    delta in 0..60_000L
+}.getOrDefault(false)
 
 internal fun openLink(context: android.content.Context, url: String) {
     try {

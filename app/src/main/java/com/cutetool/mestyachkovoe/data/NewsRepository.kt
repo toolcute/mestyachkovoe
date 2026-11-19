@@ -11,6 +11,7 @@ import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -19,8 +20,10 @@ import kotlin.math.max
 class NewsRepository {
     suspend fun load(region: Region, settings: UserSettings? = null): List<NewsItem> = withContext(Dispatchers.IO) {
         val disabled = settings?.disabledSources.orEmpty()
+        val district = settings?.federalDistrict ?: FederalDistrict.URAL
         val sources = (Sources.all + settings?.customSources.orEmpty())
             .filter { it.url !in disabled }
+            .filter { it.district == district }
             .filter { region == Region.ALL || it.region == region || it.region == Region.ALL }
 
         val items = coroutineScope {
@@ -32,7 +35,7 @@ class NewsRepository {
         }
 
         val sorted = items
-            .distinctBy { it.link.ifBlank { it.id } }
+            .distinctBy { it.link.ifBlank { it.id } + "|" + it.title }
             .sortedByDescending { it.published }
 
         val deduped = dedupe(sorted)
@@ -46,6 +49,18 @@ class NewsRepository {
                 (svo && StopWords.blocksSvoPolitics(text)) ||
                 (adult && StopWords.blocksAdult(text))
         }
+    }
+
+    suspend fun search(query: String): List<NewsItem> = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(query.trim(), "UTF-8")
+        val source = FeedSource(
+            name = "Google Новости",
+            url = "https://news.google.com/rss/search?q=$encoded&hl=ru&gl=RU&ceid=RU:ru",
+            region = Region.ALL
+        )
+        runCatching { fetchFeed(source) }.getOrDefault(emptyList())
+            .distinctBy { it.link.ifBlank { it.id } + "|" + it.title }
+            .sortedByDescending { it.published }
     }
 
     private fun dedupe(items: List<NewsItem>): List<NewsItem> {
@@ -90,7 +105,7 @@ class NewsRepository {
         val conn = (URL(source.url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8000
             readTimeout = 8000
-            setRequestProperty("User-Agent", "Mestyachkovoe/1.10")
+            setRequestProperty("User-Agent", "Mestyachkovoe/1.15")
         }
         conn.inputStream.use { stream ->
             return parse(stream, source)
@@ -109,6 +124,7 @@ class NewsRepository {
         var pubDate = ""
         var description = ""
         var content = ""
+        var itemSource = ""
         var image: String? = null
 
         while (event != XmlPullParser.END_DOCUMENT) {
@@ -117,7 +133,7 @@ class NewsRepository {
                 XmlPullParser.START_TAG -> {
                     if (name == "item" || name == "entry") {
                         inItem = true
-                        title = ""; link = ""; pubDate = ""; description = ""; content = ""; image = null
+                        title = ""; link = ""; pubDate = ""; description = ""; content = ""; itemSource = ""; image = null
                     } else if (inItem) {
                         when (name) {
                             "title" -> title = parser.nextTextOrEmpty()
@@ -129,6 +145,7 @@ class NewsRepository {
                             "pubdate", "published", "updated" -> pubDate = parser.nextTextOrEmpty()
                             "description" -> description = parser.nextTextOrEmpty()
                             "summary" -> if (description.isBlank()) description = parser.nextTextOrEmpty()
+                            "source" -> itemSource = parser.nextTextOrEmpty()
                             "encoded" -> content = parser.nextTextOrEmpty()
                             "content" -> {
                                 val url = parser.getAttributeValue(null, "url") ?: parser.getAttributeValue(null, "href")
@@ -152,7 +169,13 @@ class NewsRepository {
                         inItem = false
                         val rawBody = content.ifBlank { description }
                         val img = image ?: extractImage(rawBody)
-                        val cleanTitle = cleanHtml(title)
+                        val displaySource = itemSource.trim().ifBlank { source.name }
+                        val rawTitle = cleanHtml(title)
+                        val cleanTitle = if (itemSource.isNotBlank() && rawTitle.endsWith(" - $displaySource")) {
+                            rawTitle.removeSuffix(" - $displaySource").trim()
+                        } else {
+                            rawTitle
+                        }
                         val cleanLink = link.trim()
                         if (cleanTitle.isNotBlank() && cleanLink.isNotBlank()) {
                             items.add(
@@ -161,10 +184,11 @@ class NewsRepository {
                                     title = cleanTitle,
                                     link = cleanLink,
                                     imageUrl = img,
-                                    source = source.name,
+                                    source = displaySource,
                                     published = parseDate(pubDate),
                                     region = source.region,
                                     content = cleanHtml(rawBody),
+                                    sourceVerified = source.verified,
                                 )
                             )
                         }

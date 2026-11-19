@@ -11,8 +11,8 @@ android {
         applicationId = "com.cutetool.mestyachkovoe"
         minSdk = 26
         targetSdk = 35
-        versionCode = 111
-        versionName = "1.11"
+        versionCode = 115
+        versionName = "1.15"
 
         vectorDrawables {
             useSupportLibrary = true

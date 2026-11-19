@@ -33,9 +33,14 @@
     <string name="notifications_disabled">Уведомления отключены</string>
     <string name="add_source">Добавить источник</string>
     <string name="about">О приложении</string>
-    <string name="about_desc">Приложение, собирающее все главные новости Урала в одной ленте</string>
+    <string name="about_desc">Местячковое — агрегатор региональных новостей России</string>
     <string name="about_by">by CuteTool</string>
     <string name="about_telegram">Telegram: t.me/cutetool</string>
     <string name="about_site">Сайт: cutetool.neocities.org</string>
+    <string name="about_mestechko">Новостной сайт «Местечко»: toolcute.github.io/Mestechko</string>
+    <string name="search">Поиск по новостям</string>
+    <string name="search_testing">Поиск по новостям тестируется. Могут быть ошибки.</string>
+    <string name="federal_district">Федеральный округ</string>
+    <string name="onboarding_continue">Продолжить</string>
     <string name="close">Закрыть</string>
 </resources>

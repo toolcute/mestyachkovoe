@@ -26,6 +26,8 @@ data class UserSettings(
     val filterAdult: Boolean = true,
     val disabledSources: Set<String> = emptySet(),
     val customSources: List<FeedSource> = emptyList(),
+    val federalDistrict: FederalDistrict = FederalDistrict.URAL,
+    val onboardingDone: Boolean = false,
 )
 
 class SettingsRepository(private val context: Context) {
@@ -42,6 +44,8 @@ class SettingsRepository(private val context: Context) {
         val FILTER_ADULT = booleanPreferencesKey("filter_adult")
         val DISABLED = stringSetPreferencesKey("disabled_sources")
         val CUSTOM = stringPreferencesKey("custom_sources")
+        val FEDERAL_DISTRICT = stringPreferencesKey("federal_district")
+        val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
     }
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { p ->
@@ -62,6 +66,10 @@ class SettingsRepository(private val context: Context) {
             filterAdult = p[Keys.FILTER_ADULT] ?: true,
             disabledSources = p[Keys.DISABLED].orEmpty(),
             customSources = decodeSources(p[Keys.CUSTOM]),
+            federalDistrict = runCatching {
+                FederalDistrict.valueOf(p[Keys.FEDERAL_DISTRICT] ?: "")
+            }.getOrDefault(FederalDistrict.URAL),
+            onboardingDone = p[Keys.ONBOARDING_DONE] ?: false,
         )
     }
 
@@ -75,6 +83,16 @@ class SettingsRepository(private val context: Context) {
     suspend fun setSmartFilter(enabled: Boolean) { context.dataStore.edit { it[Keys.SMART_FILTER] = enabled } }
     suspend fun setFilterSvoPolitics(enabled: Boolean) { context.dataStore.edit { it[Keys.FILTER_SVO] = enabled } }
     suspend fun setFilterAdult(enabled: Boolean) { context.dataStore.edit { it[Keys.FILTER_ADULT] = enabled } }
+    suspend fun setFederalDistrict(district: FederalDistrict) {
+        context.dataStore.edit { it[Keys.FEDERAL_DISTRICT] = district.name }
+    }
+
+    suspend fun completeOnboarding(district: FederalDistrict) {
+        context.dataStore.edit {
+            it[Keys.FEDERAL_DISTRICT] = district.name
+            it[Keys.ONBOARDING_DONE] = true
+        }
+    }
 
     suspend fun setSourceEnabled(url: String, enabled: Boolean) {
         context.dataStore.edit { p ->
@@ -106,10 +124,15 @@ class SettingsRepository(private val context: Context) {
                 val obj = array.getJSONObject(i)
                 val url = obj.optString("url")
                 if (url.isBlank()) return@mapNotNull null
+                val region = runCatching { Region.valueOf(obj.optString("region")) }.getOrDefault(Region.ALL)
+                val district = runCatching {
+                    FederalDistrict.valueOf(obj.optString("district"))
+                }.getOrDefault(region.district)
                 FeedSource(
                     name = obj.optString("name").ifBlank { "Свой источник" },
                     url = url,
-                    region = runCatching { Region.valueOf(obj.optString("region")) }.getOrDefault(Region.ALL)
+                    region = region,
+                    district = district
                 )
             }
         }.getOrDefault(emptyList())
@@ -123,6 +146,7 @@ class SettingsRepository(private val context: Context) {
                     .put("name", source.name)
                     .put("url", source.url)
                     .put("region", source.region.name)
+                    .put("district", source.district.name)
             )
         }
         return array.toString()
