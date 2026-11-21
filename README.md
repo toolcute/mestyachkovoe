@@ -7,7 +7,6 @@
   <img width="31%"  alt="Picsart_26-11-16_22-19-21-562" src="https://github.com/user-attachments/assets/771d067f-e19e-456a-90c7-a5d0b48455fb" />
   <img width="31%"  alt="Picsart_26-11-16_22-18-55-412" src="https://github.com/user-attachments/assets/0f287d72-ea5c-470a-8ee4-e001f3bb232f" /> 
   <img width="31%"  alt="Picsart_26-11-16_22-19-21-562" src="https://github.com/user-attachments/assets/6e47c537-759b-4ac0-816a-74010f57735d" />
----
 
 ## ✨ Основные возможности
 
