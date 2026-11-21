@@ -13,7 +13,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
@@ -21,6 +20,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,6 +57,10 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     var updateIntroOpen by remember { mutableStateOf(false) }
     var districtPickerOpen by remember { mutableStateOf(false) }
     var cuteToolOpen by remember { mutableStateOf(false) }
+    var cacheDialogOpen by remember { mutableStateOf(false) }
+    var refreshTick by remember { mutableIntStateOf(0) }
+    var forceNextLoad by remember { mutableStateOf(false) }
+    var loadId by remember { mutableIntStateOf(0) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
 
     LaunchedEffect(settings.federalDistrict) {
@@ -80,19 +84,9 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         return
     }
 
-    fun load() {
-        scope.launch {
-            loading = true; error = null
-            try {
-                items = repo.load(
-                    region = selectedRegion,
-                    settings = settings
-                )
-            } catch (e: Exception) {
-                error = e.message ?: "error"
-            }
-            loading = false
-        }
+    fun reload() {
+        forceNextLoad = true
+        refreshTick++
     }
 
     LaunchedEffect(
@@ -102,9 +96,41 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         settings.customSources,
         settings.smartFilter,
         settings.filterSvoPolitics,
-        settings.filterAdult
+        settings.filterAdult,
+        refreshTick
     ) {
-        load()
+        val currentLoad = ++loadId
+        val force = forceNextLoad
+        forceNextLoad = false
+        error = null
+
+        val cached = repo.cached(selectedRegion, settings)
+        if (cached != null) {
+            items = cached
+            loading = false
+        } else {
+            items = emptyList()
+            loading = true
+        }
+
+        try {
+            val loaded = repo.load(
+                region = selectedRegion,
+                settings = settings,
+                forceRefresh = force
+            )
+            if (currentLoad == loadId) {
+                items = loaded
+                loading = false
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (currentLoad == loadId) {
+                if (items.isEmpty()) error = e.message ?: "error"
+                loading = false
+            }
+        }
     }
 
     ModalNavigationDrawer(
@@ -130,6 +156,10 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
                         scope.launch { drawerState.close() }
                         cuteToolOpen = true
                     },
+                    onCache = {
+                        scope.launch { drawerState.close() }
+                        cacheDialogOpen = true
+                    },
                     onClose = { scope.launch { drawerState.close() } }
                 )
             }
@@ -148,7 +178,7 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
                         IconButton(onClick = { searchOpen = true }) {
                             Icon(Icons.Default.Search, contentDescription = "Поиск по новостям")
                         }
-                        IconButton(onClick = { load() }) {
+                        IconButton(onClick = { reload() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Обновить")
                         }
                     }
@@ -167,7 +197,7 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
                             modifier = Modifier.align(Alignment.Center),
                             size = 64.dp
                         )
-                        error != null -> ErrorState(onRetry = { load() })
+                        error != null -> ErrorState(onRetry = { reload() })
                         items.isEmpty() -> Text("Новостей пока нет", Modifier.align(Alignment.Center))
                         else -> NewsList(items = items, onItemClick = { selectedNews = it })
                     }
@@ -219,6 +249,14 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
 
     if (cuteToolOpen) {
         CuteToolDialog(onClose = { cuteToolOpen = false })
+    }
+
+    if (cacheDialogOpen) {
+        CacheDialog(
+            settings = settings,
+            settingsRepo = settingsRepo,
+            onClose = { cacheDialogOpen = false }
+        )
     }
 }
 
@@ -393,6 +431,7 @@ fun SettingsSheet(
     onVersion: () -> Unit,
     onDistrict: () -> Unit,
     onCuteTool: () -> Unit,
+    onCache: () -> Unit,
     onClose: () -> Unit
 ) {
     Column(
@@ -426,6 +465,25 @@ fun SettingsSheet(
                 Text("Тонкая настройка", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Источники, уведомления и фильтры",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Divider()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onCache)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Кеш", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Очистка и автоочистка: ${settings.cacheAutoClean.title.lowercase()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -531,12 +589,6 @@ private fun CuteToolLink(title: String, url: String, onOpen: () -> Unit) {
             title,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyLarge
-        )
-        Icon(
-            Icons.AutoMirrored.Filled.OpenInNew,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
         )
     }
 }

@@ -2,10 +2,13 @@
 
 import android.text.Html
 import android.util.Xml
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
@@ -15,40 +18,57 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import kotlin.math.max
+import java.util.zip.GZIPInputStream
 
 class NewsRepository {
-    suspend fun load(region: Region, settings: UserSettings? = null): List<NewsItem> = withContext(Dispatchers.IO) {
-        val disabled = settings?.disabledSources.orEmpty()
-        val district = settings?.federalDistrict ?: FederalDistrict.URAL
-        val sources = (Sources.all + settings?.customSources.orEmpty())
-            .filter { it.url !in disabled }
-            .filter { it.district == district }
-            .filter { region == Region.ALL || it.region == region || it.region == Region.ALL }
+    fun cached(region: Region, settings: UserSettings? = null): List<NewsItem>? {
+        val sources = selectSources(region, settings)
+        val key = cacheKey(region, settings, sources)
+        val entry = synchronized(cache) { cache[key] } ?: return null
+        if (System.currentTimeMillis() - entry.timestamp > CACHE_TTL_MS) return null
+        return applyFilters(entry.items, region, settings)
+    }
+
+    suspend fun load(
+        region: Region,
+        settings: UserSettings? = null,
+        forceRefresh: Boolean = false
+    ): List<NewsItem> = withContext(Dispatchers.IO) {
+        val sources = selectSources(region, settings)
+        val key = cacheKey(region, settings, sources)
+
+        if (!forceRefresh) {
+            val entry = synchronized(cache) { cache[key] }
+            if (entry != null && System.currentTimeMillis() - entry.timestamp <= CACHE_TTL_MS) {
+                return@withContext applyFilters(entry.items, region, settings)
+            }
+        }
 
         val items = coroutineScope {
             sources.map { src ->
                 async {
-                    runCatching { fetchFeed(src) }.getOrDefault(emptyList())
+                    try {
+                        fetchFeed(src)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
                 }
             }.awaitAll().flatten()
         }
+
+        currentCoroutineContext().ensureActive()
 
         val sorted = items
             .distinctBy { it.link.ifBlank { it.id } + "|" + it.title }
             .sortedByDescending { it.published }
 
         val deduped = dedupe(sorted)
-
-        deduped.filterNot { item ->
-            val text = item.title + " " + item.content.take(1200)
-            val smart = settings?.smartFilter ?: true
-            val svo = settings?.filterSvoPolitics ?: true
-            val adult = settings?.filterAdult ?: true
-            (smart && StopWords.blocksRegion(region, text)) ||
-                (svo && StopWords.blocksSvoPolitics(text)) ||
-                (adult && StopWords.blocksAdult(text))
+        synchronized(cache) {
+            cache[key] = CacheEntry(deduped, System.currentTimeMillis())
         }
+        applyFilters(deduped, region, settings)
     }
 
     suspend fun search(query: String): List<NewsItem> = withContext(Dispatchers.IO) {
@@ -58,33 +78,84 @@ class NewsRepository {
             url = "https://news.google.com/rss/search?q=$encoded&hl=ru&gl=RU&ceid=RU:ru",
             region = Region.ALL
         )
-        runCatching { fetchFeed(source) }.getOrDefault(emptyList())
-            .distinctBy { it.link.ifBlank { it.id } + "|" + it.title }
-            .sortedByDescending { it.published }
+        try {
+            fetchFeed(source)
+                .distinctBy { it.link.ifBlank { it.id } + "|" + it.title }
+                .sortedByDescending { it.published }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun selectSources(region: Region, settings: UserSettings?): List<FeedSource> {
+        val disabled = settings?.disabledSources.orEmpty()
+        val district = settings?.federalDistrict ?: FederalDistrict.URAL
+        return (Sources.all + settings?.customSources.orEmpty())
+            .filter { it.district == district }
+            .filter { region == Region.ALL || it.region == region || it.region == Region.ALL }
+            .filter { it.url !in disabled }
+    }
+
+    private fun cacheKey(region: Region, settings: UserSettings?, sources: List<FeedSource>): String {
+        val district = settings?.federalDistrict ?: FederalDistrict.URAL
+        return district.name + "|" + region.name + "|" + sources.map { it.url }.sorted().joinToString(",")
+    }
+
+    private fun applyFilters(items: List<NewsItem>, region: Region, settings: UserSettings?): List<NewsItem> {
+        val smart = settings?.smartFilter ?: true
+        val svo = settings?.filterSvoPolitics ?: true
+        val adult = settings?.filterAdult ?: true
+        return items.filterNot { item ->
+            val text = item.title + " " + item.content.take(1200)
+            (smart && StopWords.blocksRegion(region, text)) ||
+                (svo && StopWords.blocksSvoPolitics(text)) ||
+                (adult && StopWords.blocksAdult(text))
+        }
     }
 
     private fun dedupe(items: List<NewsItem>): List<NewsItem> {
         val kept = ArrayList<NewsItem>(items.size)
         val signatures = ArrayList<Set<String>>(items.size)
+        val tokenIndex = HashMap<String, MutableList<Int>>()
         for (item in items) {
             val sig = signature(item)
+            if (sig.isEmpty()) {
+                kept.add(item)
+                signatures.add(sig)
+                continue
+            }
+
+            val sharedTokens = HashMap<Int, Int>()
+            for (token in sig) {
+                tokenIndex[token]?.forEach { index ->
+                    sharedTokens[index] = (sharedTokens[index] ?: 0) + 1
+                }
+            }
+
             var duplicate = false
-            for (existing in signatures) {
-                if (jaccard(sig, existing) >= 0.5) {
+            for ((index, shared) in sharedTokens) {
+                if (shared < 2) continue
+                if (jaccard(sig, signatures[index]) >= 0.5) {
                     duplicate = true
                     break
                 }
             }
-            if (!duplicate) {
-                kept.add(item)
-                signatures.add(sig)
+            if (duplicate) continue
+
+            val newIndex = kept.size
+            kept.add(item)
+            signatures.add(sig)
+            for (token in sig) {
+                tokenIndex.getOrPut(token) { ArrayList() }.add(newIndex)
             }
         }
         return kept
     }
 
     private fun signature(item: NewsItem): Set<String> {
-        val snippet = item.content.take(500)
+        val snippet = item.content.take(300)
         val text = (item.title + " " + snippet).lowercase(Locale.ROOT)
         return text.split(Regex("[^\\p{L}\\p{N}]+"))
             .asSequence()
@@ -103,12 +174,24 @@ class NewsRepository {
 
     private fun fetchFeed(source: FeedSource): List<NewsItem> {
         val conn = (URL(source.url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 8000
+            connectTimeout = 6000
             readTimeout = 8000
-            setRequestProperty("User-Agent", "Mestyachkovoe/1.16")
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "Mestyachkovoe/1.17 (+https://github.com/toolcute/mestyachkovoe)")
+            setRequestProperty("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
+            setRequestProperty("Accept-Encoding", "gzip")
         }
-        conn.inputStream.use { stream ->
-            return parse(stream, source)
+        try {
+            val encoding = conn.contentEncoding
+            val raw = conn.inputStream
+            val stream = if (encoding?.contains("gzip", ignoreCase = true) == true) {
+                GZIPInputStream(raw)
+            } else {
+                raw
+            }
+            stream.use { return parse(it, source) }
+        } finally {
+            conn.disconnect()
         }
     }
 
@@ -142,7 +225,7 @@ class NewsRepository {
                                 val text = parser.nextTextOrEmpty()
                                 link = href ?: text
                             }
-                            "pubdate", "published", "updated" -> pubDate = parser.nextTextOrEmpty()
+                            "pubdate", "published", "updated", "date" -> pubDate = parser.nextTextOrEmpty()
                             "description" -> description = parser.nextTextOrEmpty()
                             "summary" -> if (description.isBlank()) description = parser.nextTextOrEmpty()
                             "source" -> itemSource = parser.nextTextOrEmpty()
@@ -192,6 +275,7 @@ class NewsRepository {
                                 )
                             )
                         }
+                        if (items.size >= MAX_ITEMS_PER_FEED) break
                     }
                 }
             }
@@ -246,5 +330,22 @@ class NewsRepository {
             } catch (_: Exception) { }
         }
         return System.currentTimeMillis()
+    }
+
+    companion object {
+        private const val CACHE_TTL_MS = 10 * 60 * 1000L
+        private const val MAX_CACHE_ENTRIES = 8
+        private const val MAX_ITEMS_PER_FEED = 40
+
+        private data class CacheEntry(val items: List<NewsItem>, val timestamp: Long)
+
+        private val cache = object : LinkedHashMap<String, CacheEntry>(MAX_CACHE_ENTRIES, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CacheEntry>?): Boolean =
+                size > MAX_CACHE_ENTRIES
+        }
+
+        fun clearCache() {
+            synchronized(cache) { cache.clear() }
+        }
     }
 }

@@ -14,11 +14,15 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.cutetool.mestyachkovoe.MainActivity
 import com.cutetool.mestyachkovoe.R
+import com.cutetool.mestyachkovoe.data.FederalDistrict
 import com.cutetool.mestyachkovoe.data.NewsItem
 import com.cutetool.mestyachkovoe.data.NewsRepository
 import com.cutetool.mestyachkovoe.data.NotifyImportance
+import com.cutetool.mestyachkovoe.data.Region
 import com.cutetool.mestyachkovoe.data.SettingsRepository
+import com.cutetool.mestyachkovoe.data.district
 import kotlinx.coroutines.flow.first
+import java.time.LocalDate
 import java.util.Locale
 
 class NewsCheckWorker(
@@ -44,19 +48,40 @@ class NewsCheckWorker(
             return Result.success()
         }
 
+        val importantOnly = settings.notifyFrequency.importantOnly
+        val importance = if (importantOnly) NotifyImportance.MAIN else settings.notifyImportance
         val seen = prefs.getStringSet("seen_ids", emptySet()).orEmpty().toMutableSet()
         val candidates = items
             .filter { it.published > lastTs && it.id !in seen }
-            .filter { matchesImportance(it, settings.notifyImportance) }
-            .sortedBy { it.published }
+            .filter { matchesImportance(it, importance) }
+            .sortedWith(compareByDescending<NewsItem> { priority(it) }.thenByDescending { it.published })
 
         val newest = maxOf(lastTs, items.maxOfOrNull { it.published } ?: lastTs)
-        if (candidates.isNotEmpty()) {
-            candidates.takeLast(4).forEach { show(ctx, it) }
-            val trimmed = (candidates.map { it.id } + seen).distinct().take(500).toSet()
+        val dailyLimit = if (importantOnly) {
+            (1440L / settings.notifyFrequency.intervalMinutes).toInt().coerceAtLeast(1)
+        } else {
+            Int.MAX_VALUE
+        }
+        val today = LocalDate.now().toEpochDay()
+        val storedDay = prefs.getLong("notify_day", 0L)
+        val sentToday = if (storedDay == today) prefs.getInt("notify_count", 0) else 0
+        val remainingToday = (dailyLimit - sentToday).coerceAtLeast(0)
+        val perRunLimit = if (importantOnly) 1 else 4
+        val toShow = candidates.take(minOf(perRunLimit, remainingToday))
+
+        if (toShow.isNotEmpty()) {
+            toShow.forEach { show(ctx, it) }
+            val trimmed = (toShow.map { it.id } + seen).distinct().take(500).toSet()
+            val newLastTs = if (importantOnly) {
+                maxOf(lastTs, toShow.maxOf { it.published })
+            } else {
+                newest
+            }
             prefs.edit()
                 .putStringSet("seen_ids", trimmed)
-                .putLong("last_ts", newest)
+                .putLong("last_ts", newLastTs)
+                .putLong("notify_day", today)
+                .putInt("notify_count", sentToday + toShow.size)
                 .apply()
         } else {
             prefs.edit().putLong("last_ts", newest).apply()
@@ -65,10 +90,25 @@ class NewsCheckWorker(
         return Result.success()
     }
 
+    private fun priority(item: NewsItem): Int {
+        val mestechko = item.source.equals("Местечко", ignoreCase = true)
+        val ural = item.region == Region.CHELYABINSK || item.region.district == FederalDistrict.URAL
+        return when {
+            mestechko && ural -> 2
+            mestechko || ural -> 1
+            else -> 0
+        }
+    }
+
     private fun matchesImportance(item: NewsItem, importance: NotifyImportance): Boolean {
-        if (importance != NotifyImportance.EMERGENCY) return true
+        if (importance == NotifyImportance.ALL) return true
         val text = (item.title + " " + item.content).lowercase(Locale.ROOT)
-        return emergencyWords.any { text.contains(it) }
+        return when (importance) {
+            NotifyImportance.EMERGENCY -> emergencyWords.any { text.contains(it) }
+            NotifyImportance.MAIN ->
+                emergencyWords.any { text.contains(it) } || importantWords.any { text.contains(it) }
+            NotifyImportance.ALL -> true
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -117,6 +157,13 @@ class NewsCheckWorker(
         val emergencyWords = listOf(
             "чс", "чрезвычайн", "пожар", "авари", "погиб", "дтп",
             "эвакуац", "шторм", "паводок", "наводнен", "взрыв", "обрушен"
+        )
+
+        val importantWords = listOf(
+            "важн", "власт", "губернатор", "мэр", "закон", "суд", "следств",
+            "прокуратур", "экономик", "бюджет", "тариф", "цен", "зарплат",
+            "пенси", "льгот", "дорог", "транспорт", "школ", "больниц",
+            "медицин", "жкх", "отключен", "мороз", "ураган"
         )
     }
 }

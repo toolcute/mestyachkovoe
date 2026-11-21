@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cutetool.mestyachkovoe.cache.CacheScheduler
 import com.cutetool.mestyachkovoe.data.SettingsRepository
 import com.cutetool.mestyachkovoe.data.ThemeMode
 import com.cutetool.mestyachkovoe.notifications.NotificationScheduler
@@ -35,8 +36,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             } else {
-                LaunchedEffect(settings.notifyEnabled, settings.notifyFrequency) {
+                LaunchedEffect(
+                    settings.notifyEnabled,
+                    settings.notifyFrequency,
+                    settings.notifyImportance,
+                    settings.notifyRegion
+                ) {
                     NotificationScheduler.schedule(appContext, settings)
+                }
+                LaunchedEffect(settings.cacheAutoClean) {
+                    CacheScheduler.schedule(appContext, settings.cacheAutoClean)
                 }
                 MestyachkovoeTheme(mode = settings.themeMode) {
                     MestyachkovoeApp(settings = settings, settingsRepo = settingsRepo)

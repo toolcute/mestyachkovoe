@@ -9,6 +9,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,7 +44,12 @@ fun FineSettingsDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val feeds = Sources.all + settings.customSources
+    val sourceDistricts = FederalDistrict.entries.filter { district ->
+        feeds.any { it.district == district }
+    }
     var sourcesExpanded by remember { mutableStateOf(false) }
+    var sourcesDistrict by remember { mutableStateOf(settings.federalDistrict) }
+    val districtFeeds = feeds.filter { it.district == sourcesDistrict }
 
     Dialog(
         onDismissRequest = onClose,
@@ -162,7 +168,28 @@ fun FineSettingsDialog(
                     }
 
                     if (sourcesExpanded) {
-                        items(feeds, key = { it.url }) { source ->
+                        item {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(sourceDistricts) { district ->
+                                    val count = feeds.count { it.district == district }
+                                    FilterChip(
+                                        selected = district == sourcesDistrict,
+                                        onClick = { sourcesDistrict = district },
+                                        label = { Text("${district.title} · $count") }
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Text(
+                                "Источники: ${districtFeeds.size}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        items(districtFeeds, key = { it.url }) { source ->
                             val isCustom = settings.customSources.any { it.url == source.url }
                             SourceRow(
                                 source = source,
@@ -179,7 +206,7 @@ fun FineSettingsDialog(
                             AddSourceForm(
                                 existingUrls = feeds.map { it.url }.toSet(),
                                 settingsRepo = settingsRepo,
-                                defaultDistrict = settings.federalDistrict
+                                defaultDistrict = sourcesDistrict
                             )
                         }
                     }

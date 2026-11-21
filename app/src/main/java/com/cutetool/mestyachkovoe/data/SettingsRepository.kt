@@ -27,6 +27,7 @@ data class UserSettings(
     val disabledSources: Set<String> = emptySet(),
     val customSources: List<FeedSource> = emptyList(),
     val federalDistrict: FederalDistrict = FederalDistrict.URAL,
+    val cacheAutoClean: CacheAutoClean = CacheAutoClean.OFF,
     val onboardingDone: Boolean = false,
 )
 
@@ -45,6 +46,7 @@ class SettingsRepository(private val context: Context) {
         val DISABLED = stringSetPreferencesKey("disabled_sources")
         val CUSTOM = stringPreferencesKey("custom_sources")
         val FEDERAL_DISTRICT = stringPreferencesKey("federal_district")
+        val CACHE_AUTO_CLEAN = stringPreferencesKey("cache_auto_clean")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
     }
 
@@ -69,6 +71,9 @@ class SettingsRepository(private val context: Context) {
             federalDistrict = runCatching {
                 FederalDistrict.valueOf(p[Keys.FEDERAL_DISTRICT] ?: "")
             }.getOrDefault(FederalDistrict.URAL),
+            cacheAutoClean = runCatching {
+                CacheAutoClean.valueOf(p[Keys.CACHE_AUTO_CLEAN] ?: "")
+            }.getOrDefault(CacheAutoClean.OFF),
             onboardingDone = p[Keys.ONBOARDING_DONE] ?: false,
         )
     }
@@ -85,6 +90,10 @@ class SettingsRepository(private val context: Context) {
     suspend fun setFilterAdult(enabled: Boolean) { context.dataStore.edit { it[Keys.FILTER_ADULT] = enabled } }
     suspend fun setFederalDistrict(district: FederalDistrict) {
         context.dataStore.edit { it[Keys.FEDERAL_DISTRICT] = district.name }
+    }
+
+    suspend fun setCacheAutoClean(mode: CacheAutoClean) {
+        context.dataStore.edit { it[Keys.CACHE_AUTO_CLEAN] = mode.name }
     }
 
     suspend fun completeOnboarding(district: FederalDistrict) {
