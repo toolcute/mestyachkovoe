@@ -36,6 +36,18 @@ object AppLabelManager {
         }
     }
 
-    private fun aliasName(label: AppLabel, icon: LauncherIcon): String =
-        if (icon == LauncherIcon.NEW) "${label.baseAlias}Alias" else "${label.baseAlias}OldAlias"
+    fun ensureApplied(context: Context, label: AppLabel, icon: LauncherIcon) {
+        val pm = context.packageManager
+        val active = ComponentName(context.packageName, "${context.packageName}.${aliasName(label, icon)}")
+        val state = runCatching { pm.getComponentEnabledSetting(active) }.getOrDefault(
+            PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
+        )
+        if (state == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return
+        apply(context, label, icon)
+    }
+
+    private fun aliasName(label: AppLabel, icon: LauncherIcon): String = when (icon) {
+        LauncherIcon.CLASSIC -> "${label.baseAlias}Alias"
+        LauncherIcon.LOCAL -> "${label.baseAlias}LocalAlias"
+    }
 }

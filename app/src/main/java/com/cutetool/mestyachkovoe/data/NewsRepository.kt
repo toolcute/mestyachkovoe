@@ -89,6 +89,34 @@ class NewsRepository {
         }
     }
 
+    /**
+     * Loads a single source for the "Любимое" mini-feed.
+     * No smart filtering or cross-source dedupe is applied here.
+     */
+    suspend fun loadSource(url: String, customSources: List<FeedSource> = emptyList()): List<NewsItem> =
+        withContext(Dispatchers.IO) {
+            val clean = url.trim()
+            if (clean.isBlank()) return@withContext emptyList()
+            val source = (Sources.all + customSources).firstOrNull { it.url == clean }
+                ?: FeedSource(
+                    name = sourceNameFromUrl(clean),
+                    url = clean,
+                    region = Region.ALL
+                )
+            try {
+                fetchFeed(source).sortedByDescending { it.published }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+
+    private fun sourceNameFromUrl(url: String): String = runCatching {
+        val host = URL(url).host.removePrefix("www.")
+        host.ifBlank { url }
+    }.getOrDefault(url)
+
     private fun selectSources(region: Region, settings: UserSettings?): List<FeedSource> {
         val disabled = settings?.disabledSources.orEmpty()
         val district = settings?.federalDistrict ?: FederalDistrict.URAL
@@ -177,7 +205,7 @@ class NewsRepository {
             connectTimeout = 6000
             readTimeout = 8000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Mestyachkovoe/1.17 (+https://github.com/toolcute/mestyachkovoe)")
+            setRequestProperty("User-Agent", "Mestyachkovoe/1.19 (+https://github.com/toolcute/mestyachkovoe)")
             setRequestProperty("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
             setRequestProperty("Accept-Encoding", "gzip")
         }
@@ -205,6 +233,8 @@ class NewsRepository {
         var title = ""
         var link = ""
         var pubDate = ""
+        var updatedDate = ""
+        var guid = ""
         var description = ""
         var content = ""
         var itemSource = ""
@@ -216,7 +246,8 @@ class NewsRepository {
                 XmlPullParser.START_TAG -> {
                     if (name == "item" || name == "entry") {
                         inItem = true
-                        title = ""; link = ""; pubDate = ""; description = ""; content = ""; itemSource = ""; image = null
+                        title = ""; link = ""; pubDate = ""; updatedDate = ""; guid = ""
+                        description = ""; content = ""; itemSource = ""; image = null
                     } else if (inItem) {
                         when (name) {
                             "title" -> title = parser.nextTextOrEmpty()
@@ -225,7 +256,20 @@ class NewsRepository {
                                 val text = parser.nextTextOrEmpty()
                                 link = href ?: text
                             }
-                            "pubdate", "published", "updated", "date" -> pubDate = parser.nextTextOrEmpty()
+                            "pubdate", "published" -> {
+                                if (pubDate.isBlank()) pubDate = parser.nextTextOrEmpty()
+                                else parser.nextTextOrEmpty()
+                            }
+                            "updated" -> {
+                                if (updatedDate.isBlank()) updatedDate = parser.nextTextOrEmpty()
+                                else parser.nextTextOrEmpty()
+                            }
+                            "date" -> {
+                                // dc:date and similar namespaced dates
+                                if (pubDate.isBlank()) pubDate = parser.nextTextOrEmpty()
+                                else parser.nextTextOrEmpty()
+                            }
+                            "guid", "id" -> guid = parser.nextTextOrEmpty()
                             "description" -> description = parser.nextTextOrEmpty()
                             "summary" -> if (description.isBlank()) description = parser.nextTextOrEmpty()
                             "source" -> itemSource = parser.nextTextOrEmpty()
@@ -261,6 +305,10 @@ class NewsRepository {
                         }
                         val cleanLink = link.trim()
                         if (cleanTitle.isNotBlank() && cleanLink.isNotBlank()) {
+                            val realPublished = parseDate(pubDate)
+                                ?: parseDate(updatedDate)
+                                ?: parseGuidDate(guid)
+                                ?: 0L
                             items.add(
                                 NewsItem(
                                     id = cleanLink,
@@ -268,10 +316,11 @@ class NewsRepository {
                                     link = cleanLink,
                                     imageUrl = img,
                                     source = displaySource,
-                                    published = parseDate(pubDate),
+                                    published = realPublished,
                                     region = source.region,
                                     content = cleanHtml(rawBody),
                                     sourceVerified = source.verified,
+                                    feedUrl = source.url,
                                 )
                             )
                         }
@@ -311,25 +360,71 @@ class NewsRepository {
             .trim()
     }
 
-    private fun parseDate(raw: String): Long {
-        if (raw.isBlank()) return System.currentTimeMillis()
+    private fun parseDate(raw: String): Long? {
+        val value = raw.trim()
+        if (value.isBlank()) return null
         val patterns = listOf(
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss",
             "EEE, dd MMM yyyy HH:mm:ss Z",
             "EEE, dd MMM yyyy HH:mm:ss z",
-            "yyyy-MM-dd'T'HH:mm:ss'Z'",
-            "yyyy-MM-dd'T'HH:mm:ssXXX",
+            "EEE, d MMM yyyy HH:mm:ss Z",
+            "dd MMM yyyy HH:mm:ss Z",
+            "dd MMM yyyy HH:mm:ss z",
             "yyyy-MM-dd HH:mm:ss",
-            "dd MMM yyyy HH:mm:ss Z"
+            "yyyy-MM-dd HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yyyy HH:mm"
         )
         for (p in patterns) {
             try {
                 val fmt = SimpleDateFormat(p, Locale.US)
-                if (p.contains("'Z'")) fmt.timeZone = TimeZone.getTimeZone("UTC")
-                val d = fmt.parse(raw.trim())
+                fmt.isLenient = false
+                fmt.timeZone = when {
+                    p.contains("'Z'") -> TimeZone.getTimeZone("UTC")
+                    p.contains("Z") || p.contains("z") || p.contains("X") ->
+                        TimeZone.getTimeZone("UTC")
+                    else -> TimeZone.getTimeZone("Europe/Moscow")
+                }
+                val d = fmt.parse(value)
                 if (d != null) return d.time
-            } catch (_: Exception) { }
+            } catch (_: Exception) {
+            }
         }
-        return System.currentTimeMillis()
+        return null
+    }
+
+    /**
+     * Old Mestechko posts have no <pubDate>. Their guid carries the real local
+     * publication time, for example: mestechko-26.11.2026 16:23-0 (UTC+5).
+     */
+    private fun parseGuidDate(guid: String): Long? {
+        if (guid.isBlank()) return null
+        val match = Regex(
+            """mestechko-(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})""",
+            RegexOption.IGNORE_CASE
+        ).find(guid) ?: return null
+        val value = buildString {
+            append(match.groupValues[1]).append('.')
+            append(match.groupValues[2]).append('.')
+            append(match.groupValues[3]).append(' ')
+            append(match.groupValues[4]).append(':')
+            append(match.groupValues[5])
+        }
+        return try {
+            val fmt = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.US).apply {
+                isLenient = false
+                timeZone = TimeZone.getTimeZone("GMT+5")
+            }
+            fmt.parse(value)?.time
+        } catch (_: Exception) {
+            null
+        }
     }
 
     companion object {

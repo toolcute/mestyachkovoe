@@ -56,7 +56,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun SearchDialog(
     onClose: () -> Unit,
-    onOpenNews: (NewsItem) -> Unit
+    onOpenNews: (NewsItem) -> Unit,
+    savedTitles: Set<String> = emptySet(),
+    onToggleLike: ((NewsItem) -> Unit)? = null
 ) {
     val repo = remember { NewsRepository() }
     val scope = rememberCoroutineScope()
@@ -223,7 +225,12 @@ fun SearchDialog(
                                     )
                                 }
                                 items(results, key = { it.id + it.published }) { item ->
-                                    NewsCard(item = item, onClick = { onOpenNews(item) })
+                                    NewsCard(
+                                        item = item,
+                                        onClick = { onOpenNews(item) },
+                                        saved = item.title.trim().lowercase() in savedTitles,
+                                        onToggleLike = onToggleLike?.let { toggle -> { toggle(item) } }
+                                    )
                                 }
                             }
                         }

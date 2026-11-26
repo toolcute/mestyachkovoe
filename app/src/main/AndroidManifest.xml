@@ -43,12 +43,12 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".MestyachkovoeOldAlias"
+            android:name=".MestyachkovoeLocalAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_old"
+            android:icon="@mipmap/ic_launcher_local"
             android:label="@string/app_name"
-            android:roundIcon="@mipmap/ic_launcher_old_round"
+            android:roundIcon="@mipmap/ic_launcher_local_round"
             android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -71,12 +71,12 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".UralskoeOldAlias"
+            android:name=".UralskoeLocalAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_old"
+            android:icon="@mipmap/ic_launcher_local"
             android:label="@string/app_name_uralskoe"
-            android:roundIcon="@mipmap/ic_launcher_old_round"
+            android:roundIcon="@mipmap/ic_launcher_local_round"
             android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -99,12 +99,12 @@
         </activity-alias>
 
         <activity-alias
-            android:name=".NovostiOldAlias"
+            android:name=".NovostiLocalAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_old"
+            android:icon="@mipmap/ic_launcher_local"
             android:label="@string/app_name_news"
-            android:roundIcon="@mipmap/ic_launcher_old_round"
+            android:roundIcon="@mipmap/ic_launcher_local_round"
             android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

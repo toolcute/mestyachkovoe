@@ -14,9 +14,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.cutetool.mestyachkovoe.data.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -58,10 +62,15 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     var districtPickerOpen by remember { mutableStateOf(false) }
     var cuteToolOpen by remember { mutableStateOf(false) }
     var cacheDialogOpen by remember { mutableStateOf(false) }
+    var cutisOpen by remember { mutableStateOf(false) }
+    var favoritesOpen by remember { mutableStateOf(false) }
     var refreshTick by remember { mutableIntStateOf(0) }
     var forceNextLoad by remember { mutableStateOf(false) }
     var loadId by remember { mutableIntStateOf(0) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val savedTitles = remember(settings.savedPosts) {
+        settings.savedPosts.map { it.key }.toSet()
+    }
 
     LaunchedEffect(settings.federalDistrict) {
         selectedRegion = Region.ALL
@@ -84,9 +93,44 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         return
     }
 
+    if (cutisOpen) {
+        CutisScreen(onExit = { cutisOpen = false })
+        return
+    }
+
     fun reload() {
         forceNextLoad = true
         refreshTick++
+    }
+
+    fun toggleLike(item: NewsItem) {
+        scope.launch {
+            settingsRepo.toggleSavedPost(item)
+            runCatching { CuteIdRepository.sendSync(settingsRepo.snapshot()) }
+        }
+    }
+
+    fun toggleFavoriteSource(url: String) {
+        scope.launch {
+            settingsRepo.toggleSavedSource(url)
+            runCatching { CuteIdRepository.sendSync(settingsRepo.snapshot()) }
+        }
+    }
+
+    // While CID auth is pending, poll Telegram every 2.5 seconds and merge the cloud data.
+    LaunchedEffect(settings.cidSession, settings.cidLinked) {
+        val session = settings.cidSession
+        if (settings.cidLinked || session.isNullOrBlank()) return@LaunchedEffect
+        repeat(80) {
+            delay(2500)
+            val auth = runCatching { CuteIdRepository.pollForAuth(session) }.getOrNull()
+                ?: return@repeat
+            settingsRepo.mergeCidData(auth)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                runCatching { CuteIdRepository.sendSync(settingsRepo.snapshot()) }
+            }
+            return@LaunchedEffect
+        }
     }
 
     LaunchedEffect(
@@ -133,73 +177,94 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         }
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
-                SettingsSheet(
-                    settings = settings,
-                    onTheme = { scope.launch { settingsRepo.setTheme(it) } },
-                    onFineSettings = {
-                        scope.launch { drawerState.close() }
-                        fineSettingsOpen = true
-                    },
-                    onVersion = {
-                        scope.launch { drawerState.close() }
-                        versionDialogOpen = true
-                    },
-                    onDistrict = {
-                        scope.launch { drawerState.close() }
-                        districtPickerOpen = true
-                    },
-                    onCuteTool = {
-                        scope.launch { drawerState.close() }
-                        cuteToolOpen = true
-                    },
-                    onCache = {
-                        scope.launch { drawerState.close() }
-                        cacheDialogOpen = true
-                    },
-                    onClose = { scope.launch { drawerState.close() } }
-                )
+    if (favoritesOpen) {
+        FavoritesScreen(
+            settings = settings,
+            settingsRepo = settingsRepo,
+            onClose = { favoritesOpen = false },
+            onOpenNews = { selectedNews = it }
+        )
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(modifier = Modifier.width(320.dp)) {
+                    SettingsSheet(
+                        settings = settings,
+                        onTheme = { scope.launch { settingsRepo.setTheme(it) } },
+                        onFineSettings = {
+                            scope.launch { drawerState.close() }
+                            fineSettingsOpen = true
+                        },
+                        onVersion = {
+                            scope.launch { drawerState.close() }
+                            versionDialogOpen = true
+                        },
+                        onDistrict = {
+                            scope.launch { drawerState.close() }
+                            districtPickerOpen = true
+                        },
+                        onCuteTool = {
+                            scope.launch { drawerState.close() }
+                            cuteToolOpen = true
+                        },
+                        onCutis = {
+                            scope.launch { drawerState.close() }
+                            cutisOpen = true
+                        },
+                        onCache = {
+                            scope.launch { drawerState.close() }
+                            cacheDialogOpen = true
+                        },
+                        onClose = { scope.launch { drawerState.close() } }
+                    )
+                }
             }
-        }
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(settings.appLabel.title, fontWeight = FontWeight.SemiBold) },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Меню")
+        ) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text(settings.appLabel.title, fontWeight = FontWeight.SemiBold) },
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Default.Menu, contentDescription = "Меню")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { favoritesOpen = true }) {
+                                Icon(Icons.Default.Favorite, contentDescription = "Любимое")
+                            }
+                            IconButton(onClick = { searchOpen = true }) {
+                                Icon(Icons.Default.Search, contentDescription = "Поиск по новостям")
+                            }
+                            IconButton(onClick = { reload() }) {
+                                Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                            }
                         }
-                    },
-                    actions = {
-                        IconButton(onClick = { searchOpen = true }) {
-                            Icon(Icons.Default.Search, contentDescription = "Поиск по новостям")
+                    )
+                }
+            ) { padding ->
+                Column(Modifier.padding(padding)) {
+                    RegionChips(
+                        district = settings.federalDistrict,
+                        selected = selectedRegion,
+                        onSelect = { selectedRegion = it }
+                    )
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        when {
+                            loading -> ExpressiveLoadingIndicator(
+                                modifier = Modifier.align(Alignment.Center),
+                                size = 64.dp
+                            )
+                            error != null -> ErrorState(onRetry = { reload() })
+                            items.isEmpty() -> Text("Новостей пока нет", Modifier.align(Alignment.Center))
+                            else -> NewsList(
+                                items = items,
+                                savedTitles = savedTitles,
+                                onItemClick = { selectedNews = it },
+                                onToggleLike = { toggleLike(it) }
+                            )
                         }
-                        IconButton(onClick = { reload() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Обновить")
-                        }
-                    }
-                )
-            }
-        ) { padding ->
-            Column(Modifier.padding(padding)) {
-                RegionChips(
-                    district = settings.federalDistrict,
-                    selected = selectedRegion,
-                    onSelect = { selectedRegion = it }
-                )
-                Box(Modifier.fillMaxWidth().weight(1f)) {
-                    when {
-                        loading -> ExpressiveLoadingIndicator(
-                            modifier = Modifier.align(Alignment.Center),
-                            size = 64.dp
-                        )
-                        error != null -> ErrorState(onRetry = { reload() })
-                        items.isEmpty() -> Text("Новостей пока нет", Modifier.align(Alignment.Center))
-                        else -> NewsList(items = items, onItemClick = { selectedNews = it })
                     }
                 }
             }
@@ -207,7 +272,15 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     }
 
     selectedNews?.let { news ->
-        NewsDetailSheet(item = news, onDismiss = { selectedNews = null })
+        val feedUrl = news.feedUrl.ifBlank { news.link }
+        NewsDetailSheet(
+            item = news,
+            onDismiss = { selectedNews = null },
+            saved = news.title.trim().lowercase() in savedTitles,
+            sourceSaved = feedUrl in settings.savedSources,
+            onToggleLike = { toggleLike(news) },
+            onToggleSource = { toggleFavoriteSource(feedUrl) }
+        )
     }
 
     if (fineSettingsOpen) {
@@ -221,7 +294,9 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     if (searchOpen) {
         SearchDialog(
             onClose = { searchOpen = false },
-            onOpenNews = { selectedNews = it }
+            onOpenNews = { selectedNews = it },
+            savedTitles = savedTitles,
+            onToggleLike = { toggleLike(it) }
         )
     }
 
@@ -287,19 +362,34 @@ fun RegionChips(district: FederalDistrict, selected: Region, onSelect: (Region) 
 }
 
 @Composable
-fun NewsList(items: List<NewsItem>, onItemClick: (NewsItem) -> Unit) {
+fun NewsList(
+    items: List<NewsItem>,
+    onItemClick: (NewsItem) -> Unit,
+    savedTitles: Set<String> = emptySet(),
+    onToggleLike: ((NewsItem) -> Unit)? = null
+) {
     LazyColumn(
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(items, key = { it.id + it.published + it.title }) { item ->
-            NewsCard(item = item, onClick = { onItemClick(item) })
+            NewsCard(
+                item = item,
+                onClick = { onItemClick(item) },
+                saved = item.title.trim().lowercase() in savedTitles,
+                onToggleLike = onToggleLike?.let { toggle -> { toggle(item) } }
+            )
         }
     }
 }
 
 @Composable
-fun NewsCard(item: NewsItem, onClick: () -> Unit) {
+fun NewsCard(
+    item: NewsItem,
+    onClick: () -> Unit,
+    saved: Boolean = false,
+    onToggleLike: (() -> Unit)? = null
+) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp)
@@ -313,21 +403,36 @@ fun NewsCard(item: NewsItem, onClick: () -> Unit) {
                     contentScale = ContentScale.Crop
                 )
             }
-            Column(Modifier.padding(12.dp)) {
-                Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.source, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                    if (item.sourceVerified) {
+            Row(
+                Modifier.padding(12.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(item.source, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        if (item.sourceVerified) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = "Проверенный источник",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Text("•", style = MaterialTheme.typography.bodySmall)
+                        Text(formatTime(item.published), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (onToggleLike != null) {
+                    IconButton(onClick = onToggleLike) {
                         Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Проверенный источник",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
+                            if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (saved) "Убрать из любимого" else "В любимое",
+                            tint = if (saved) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text("•", style = MaterialTheme.typography.bodySmall)
-                    Text(formatTime(item.published), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -336,7 +441,14 @@ fun NewsCard(item: NewsItem, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewsDetailSheet(item: NewsItem, onDismiss: () -> Unit) {
+fun NewsDetailSheet(
+    item: NewsItem,
+    onDismiss: () -> Unit,
+    saved: Boolean = false,
+    sourceSaved: Boolean = false,
+    onToggleLike: (() -> Unit)? = null,
+    onToggleSource: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -366,11 +478,24 @@ fun NewsDetailSheet(item: NewsItem, onDismiss: () -> Unit) {
                     }
                 }
                 item {
-                    Text(
-                        item.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            item.title,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (onToggleLike != null) {
+                            IconButton(onClick = onToggleLike) {
+                                Icon(
+                                    if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (saved) "Убрать из любимого" else "В любимое",
+                                    tint = if (saved) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -406,6 +531,21 @@ fun NewsDetailSheet(item: NewsItem, onDismiss: () -> Unit) {
             ) {
                 Text("Открыть на сайте источника")
             }
+            if (onToggleSource != null) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onToggleSource,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        if (sourceSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (sourceSaved) "Источник в любимом" else "Источник в любимое!")
+                }
+            }
         }
     }
 }
@@ -431,6 +571,7 @@ fun SettingsSheet(
     onVersion: () -> Unit,
     onDistrict: () -> Unit,
     onCuteTool: () -> Unit,
+    onCutis: () -> Unit,
     onCache: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -450,6 +591,25 @@ fun SettingsSheet(
                 SegButton("Ч/Б", settings.themeMode == ThemeMode.MONO) { onTheme(ThemeMode.MONO) }
             }
             SegButton("Светлая", settings.themeMode == ThemeMode.LIGHT) { onTheme(ThemeMode.LIGHT) }
+        }
+        Divider()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onCutis)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Pets, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Cutis — игра", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Тамагочи-уголок: Кути, у.е. и мини-игры",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Divider()
         Row(
@@ -611,11 +771,13 @@ fun RadioRow(text: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 internal fun formatTime(ts: Long): String {
+    if (ts <= 0L) return "дата неизвестна"
     val now = System.currentTimeMillis()
-    val diff = now - ts
+    val diff = (now - ts).coerceAtLeast(0L)
     val min = diff / 60000
     val hrs = diff / 3600000
     return when {
+        min < 1 -> "только что"
         min < 60 -> "$min мин. назад"
         hrs < 24 -> "$hrs ч. назад"
         else -> SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()).format(Date(ts))

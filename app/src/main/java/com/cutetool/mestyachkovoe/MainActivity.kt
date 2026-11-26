@@ -47,6 +47,9 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(settings.cacheAutoClean) {
                     CacheScheduler.schedule(appContext, settings.cacheAutoClean)
                 }
+                LaunchedEffect(settings.appLabel, settings.launcherIcon) {
+                    AppLabelManager.ensureApplied(appContext, settings.appLabel, settings.launcherIcon)
+                }
                 MestyachkovoeTheme(mode = settings.themeMode) {
                     MestyachkovoeApp(settings = settings, settingsRepo = settingsRepo)
                 }

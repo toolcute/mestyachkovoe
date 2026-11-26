@@ -97,7 +97,7 @@ fun FineSettingsDialog(
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             LauncherIcon.entries.forEach { icon ->
                                 RadioRow(
-                                    if (icon == LauncherIcon.NEW) "Новая иконка" else "Прежняя иконка",
+                                    if (icon == LauncherIcon.CLASSIC) "Классика (по умолчанию)" else icon.title,
                                     settings.launcherIcon == icon
                                 ) {
                                     scope.launch {
@@ -347,7 +347,9 @@ private fun AddSourceForm(
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
-    var region by remember { mutableStateOf(Region.CHELYABINSK) }
+    var region by remember(defaultDistrict) {
+        mutableStateOf(defaultDistrict.regions.firstOrNull() ?: Region.ALL)
+    }
     var error by remember { mutableStateOf<String?>(null) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
