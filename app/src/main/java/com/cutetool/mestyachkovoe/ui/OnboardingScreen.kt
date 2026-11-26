@@ -41,13 +41,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.cutetool.mestyachkovoe.data.DistrictStatus
 import com.cutetool.mestyachkovoe.data.FederalDistrict
+import com.cutetool.mestyachkovoe.ui.theme.ExpressiveShapes
 
-private val WelcomeShape = RoundedCornerShape(
-    topStart = 32.dp,
-    topEnd = 10.dp,
-    bottomEnd = 32.dp,
-    bottomStart = 10.dp
-)
+private val WelcomeShape = ExpressiveShapes.hero
 
 @Composable
 fun OnboardingScreen(
@@ -69,7 +65,7 @@ fun OnboardingScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    shape = RoundedCornerShape(22.dp, 8.dp, 22.dp, 8.dp),
+                    shape = ExpressiveShapes.tile,
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(56.dp)
                 ) {
@@ -130,6 +126,7 @@ fun OnboardingScreen(
             Spacer(Modifier.height(14.dp))
             Button(
                 onClick = { onContinue(selected) },
+                shape = ExpressiveShapes.button,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Продолжить с «${selected.title}»")
@@ -153,12 +150,7 @@ fun DistrictPickerDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
-            shape = RoundedCornerShape(
-                topStart = 30.dp,
-                topEnd = 10.dp,
-                bottomEnd = 30.dp,
-                bottomStart = 18.dp
-            ),
+            shape = ExpressiveShapes.hero,
             tonalElevation = 6.dp
         ) {
             Column(Modifier.padding(20.dp)) {
@@ -206,12 +198,7 @@ fun UpdateIntroDialog(
 ) {
     Dialog(onDismissRequest = onKeepUral) {
         Surface(
-            shape = RoundedCornerShape(
-                topStart = 34.dp,
-                topEnd = 12.dp,
-                bottomEnd = 34.dp,
-                bottomStart = 12.dp
-            ),
+            shape = ExpressiveShapes.hero,
             tonalElevation = 6.dp
         ) {
             Column(
@@ -242,14 +229,14 @@ fun UpdateIntroDialog(
                     "Местячковое стало мультирегиональным: лента собирает новости выбранного федерального округа. Для вас по умолчанию оставлен Урал.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                HighlightRow("Новые регионы", "Центральная Россия, Приволжье, Сибирь, Подмосковье, Юг России и СЗФО")
+                HighlightRow("Новые регионы", "Центральная Россия, Приволжье, Сибирь, Подмосковье, Юг России, СЗФО и Дальний Восток")
                 HighlightRow("Поиск", "Ищите новости по всей России по кнопке-лупе")
                 HighlightRow("Где изменить", "Настройки → ФедОкруг ленты")
                 Spacer(Modifier.height(4.dp))
-                Button(onClick = onKeepUral, modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onKeepUral, shape = ExpressiveShapes.button, modifier = Modifier.fillMaxWidth()) {
                     Text("Оставить Урал")
                 }
-                OutlinedButton(onClick = onChooseDistrict, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onChooseDistrict, shape = ExpressiveShapes.button, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Выбрать другой округ")
@@ -302,7 +289,7 @@ private fun DistrictOptionRow(
     Surface(
         onClick = onSelect,
         enabled = enabled,
-        shape = RoundedCornerShape(20.dp, 6.dp, 20.dp, 6.dp),
+        shape = ExpressiveShapes.tile,
         color = container,
         contentColor = content,
         border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,

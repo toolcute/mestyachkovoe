@@ -4,19 +4,25 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Public
@@ -40,6 +46,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.cutetool.mestyachkovoe.data.*
+import com.cutetool.mestyachkovoe.ui.theme.ExpressiveShapes
+import com.cutetool.mestyachkovoe.ui.theme.pressScale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -188,7 +196,8 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
             settings = settings,
             settingsRepo = settingsRepo,
             onClose = { favoritesOpen = false },
-            onOpenNews = { selectedNews = it }
+            onOpenNews = { selectedNews = it },
+            onCheckCid = { cidPollTick++ }
         )
     } else {
         ModalNavigationDrawer(
@@ -224,25 +233,15 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
             }
         ) {
             Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
                 topBar = {
-                    TopAppBar(
-                        title = { Text(settings.appLabel.title, fontWeight = FontWeight.SemiBold) },
-                        navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Меню")
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = { favoritesOpen = true }) {
-                                Icon(Icons.Default.Favorite, contentDescription = "Любимое")
-                            }
-                            IconButton(onClick = { searchOpen = true }) {
-                                Icon(Icons.Default.Search, contentDescription = "Поиск по новостям")
-                            }
-                            IconButton(onClick = { reload() }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Обновить")
-                            }
-                        }
+                    ExpressiveTopBar(
+                        title = settings.appLabel.title,
+                        district = settings.federalDistrict.title,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onFavorites = { favoritesOpen = true },
+                        onSearch = { searchOpen = true },
+                        onRefresh = { reload() }
                     )
                 }
             ) { padding ->
@@ -256,10 +255,10 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
                         when {
                             loading -> ExpressiveLoadingIndicator(
                                 modifier = Modifier.align(Alignment.Center),
-                                size = 64.dp
+                                size = 56.dp
                             )
                             error != null -> ErrorState(onRetry = { reload() })
-                            items.isEmpty() -> Text("Новостей пока нет", Modifier.align(Alignment.Center))
+                            items.isEmpty() -> EmptyFeedState()
                             else -> NewsList(
                                 items = items,
                                 savedTitles = savedTitles,
@@ -338,29 +337,129 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
 }
 
 @Composable
+fun ExpressiveTopBar(
+    title: String,
+    district: String,
+    onMenu: () -> Unit,
+    onFavorites: () -> Unit,
+    onSearch: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 12.dp),
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TopBarAction(Icons.Default.Menu, "Меню", onMenu)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    district,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            TopBarAction(Icons.Default.Favorite, "Любимое", onFavorites)
+            Spacer(Modifier.width(6.dp))
+            TopBarAction(Icons.Default.Search, "Поиск по новостям", onSearch)
+            Spacer(Modifier.width(6.dp))
+            TopBarAction(Icons.Default.Refresh, "Обновить", onRefresh)
+        }
+    }
+}
+
+@Composable
+private fun TopBarAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(40.dp)
+            .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
 fun RegionChips(district: FederalDistrict, selected: Region, onSelect: (Region) -> Unit) {
     val regions = district.regions
     if (regions.size <= 1) return
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item {
-            FilterChip(
+            RegionChip(
+                title = Region.ALL.title,
                 selected = selected == Region.ALL,
-                onClick = { onSelect(Region.ALL) },
-                label = { Text(Region.ALL.title) }
+                onClick = { onSelect(Region.ALL) }
             )
         }
         items(regions) { region ->
-            FilterChip(
+            RegionChip(
+                title = region.title,
                 selected = region == selected,
-                onClick = { onSelect(region) },
-                label = { Text(region.title, maxLines = 1) }
+                onClick = { onSelect(region) }
             )
         }
     }
     Spacer(Modifier.height(6.dp))
+}
+
+@Composable
+private fun RegionChip(title: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        shape = CircleShape,
+        label = {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1
+            )
+        },
+        leadingIcon = if (selected) {
+            {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        } else null,
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            selectedContainerColor = MaterialTheme.colorScheme.primary,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+        )
+    )
 }
 
 @Composable
@@ -371,8 +470,8 @@ fun NewsList(
     onToggleLike: ((NewsItem) -> Unit)? = null
 ) {
     LazyColumn(
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(items, key = { it.id + it.published + it.title }) { item ->
             NewsCard(
@@ -392,52 +491,140 @@ fun NewsCard(
     saved: Boolean = false,
     onToggleLike: (() -> Unit)? = null
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressScale(interaction)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick
+            ),
+        shape = ExpressiveShapes.card,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
             if (!item.imageUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = item.imageUrl,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                    modifier = Modifier.fillMaxWidth().height(200.dp),
                     contentScale = ContentScale.Crop
                 )
             }
-            Row(
-                Modifier.padding(12.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(item.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(item.source, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        if (item.sourceVerified) {
-                            Icon(
-                                Icons.Default.CheckCircle,
-                                contentDescription = "Проверенный источник",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp)
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Column(
+                        Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Text(
+                                    item.source,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1
+                                )
+                            }
+                            if (item.sourceVerified) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Проверенный источник",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            Text(
+                                formatTime(item.published),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text("•", style = MaterialTheme.typography.bodySmall)
-                        Text(formatTime(item.published), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                if (onToggleLike != null) {
-                    IconButton(onClick = onToggleLike) {
-                        Icon(
-                            if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (saved) "Убрать из любимого" else "В любимое",
-                            tint = if (saved) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        Text(
+                            item.region.title,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    if (onToggleLike != null) {
+                        FilledTonalIconButton(
+                            onClick = onToggleLike,
+                            shape = CircleShape,
+                            modifier = Modifier.size(46.dp),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = if (saved) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHighest
+                                },
+                                contentColor = if (saved) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        ) {
+                            Icon(
+                                if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (saved) "Убрать из любимого" else "В любимое",
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun EmptyFeedState() {
+    Column(
+        Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            shape = ExpressiveShapes.tile,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.size(72.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.Public,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Пока тихо", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Попробуйте обновить ленту или выбрать другой регион.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -456,7 +643,10 @@ fun NewsDetailSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        shape = ExpressiveShapes.sheet,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
             Modifier
@@ -529,6 +719,7 @@ fun NewsDetailSheet(
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = { openLink(context, item.link) },
+                shape = ExpressiveShapes.button,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Открыть на сайте источника")
@@ -537,6 +728,7 @@ fun NewsDetailSheet(
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = onToggleSource,
+                    shape = ExpressiveShapes.button,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
@@ -555,13 +747,34 @@ fun NewsDetailSheet(
 @Composable
 fun ErrorState(onRetry: () -> Unit) {
     Column(
-        Modifier.fillMaxSize(),
+        Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("Не удалось загрузить новости")
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onRetry) { Text("Повторить") }
+        Surface(
+            shape = ExpressiveShapes.tile,
+            color = MaterialTheme.colorScheme.errorContainer,
+            modifier = Modifier.size(72.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Не удалось загрузить новости", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Проверьте подключение к интернету и попробуйте снова.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onRetry, shape = ExpressiveShapes.button) { Text("Повторить") }
     }
 }
 
@@ -580,107 +793,140 @@ fun SettingsSheet(
         Modifier
             .fillMaxHeight()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Настройки", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-        Divider()
-        Text("Тема", style = MaterialTheme.typography.titleMedium)
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SegButton("Monet", settings.themeMode == ThemeMode.MONET) { onTheme(ThemeMode.MONET) }
-                SegButton("Ч/Б", settings.themeMode == ThemeMode.MONO) { onTheme(ThemeMode.MONO) }
-            }
-            SegButton("Светлая", settings.themeMode == ThemeMode.LIGHT) { onTheme(ThemeMode.LIGHT) }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                "Настройки",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                "Сделайте ленту своей",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        Divider()
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onFineSettings)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Тонкая настройка", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Источники, уведомления и фильтры",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
+        Text("Тема", style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SegButton("Monet", settings.themeMode == ThemeMode.MONET, Modifier.weight(1f)) {
+                onTheme(ThemeMode.MONET)
+            }
+            SegButton("Ч/Б", settings.themeMode == ThemeMode.MONO, Modifier.weight(1f)) {
+                onTheme(ThemeMode.MONO)
             }
         }
-        Divider()
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onCache)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Storage, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Кеш", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Очистка и автоочистка: ${settings.cacheAutoClean.title.lowercase()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        SegButton("Светлая", settings.themeMode == ThemeMode.LIGHT, Modifier.fillMaxWidth()) {
+            onTheme(ThemeMode.LIGHT)
         }
-        Divider()
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onVersion)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Text("Версия приложения", style = MaterialTheme.typography.titleMedium)
-        }
-        Divider()
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onDistrict)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Public, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("ФедОкруг ленты", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    settings.federalDistrict.title,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onCuteTool)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Text("by CuteTool", style = MaterialTheme.typography.titleMedium)
-        }
-        Divider()
-        Text("О приложении", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Местячковое — агрегатор региональных новостей России. Собирает новости выбранного федерального округа в одну удобную ленту.",
-            style = MaterialTheme.typography.bodyMedium
+
+        SettingsActionCard(
+            icon = Icons.Default.Tune,
+            title = "Тонкая настройка",
+            subtitle = "Источники, уведомления и фильтры",
+            onClick = onFineSettings
         )
-        Spacer(Modifier.height(12.dp))
-        OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth()) { Text("Закрыть") }
+        SettingsActionCard(
+            icon = Icons.Default.Storage,
+            title = "Кеш",
+            subtitle = "Очистка и автоочистка: ${settings.cacheAutoClean.title.lowercase()}",
+            onClick = onCache
+        )
+        SettingsActionCard(
+            icon = Icons.Default.Info,
+            title = "Версия приложения",
+            subtitle = "Обновления и ченжлог",
+            onClick = onVersion
+        )
+        SettingsActionCard(
+            icon = Icons.Default.Public,
+            title = "ФедОкруг ленты",
+            subtitle = settings.federalDistrict.title,
+            onClick = onDistrict
+        )
+        SettingsActionCard(
+            icon = Icons.Default.Person,
+            title = "by CuteTool",
+            subtitle = "Сайт, Telegram и «Местечко»",
+            onClick = onCuteTool
+        )
+
+        Surface(
+            shape = ExpressiveShapes.hero,
+            color = MaterialTheme.colorScheme.primaryContainer
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "О приложении",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Text(
+                    "Местячковое — агрегатор региональных новостей России. Собирает новости выбранного федерального округа в одну удобную ленту.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(
+            onClick = onClose,
+            shape = ExpressiveShapes.button,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Закрыть") }
+    }
+}
+
+@Composable
+private fun SettingsActionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = ExpressiveShapes.tile,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(46.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -688,6 +934,7 @@ fun SettingsSheet(
 fun CuteToolDialog(onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
+        shape = ExpressiveShapes.hero,
         title = { Text("by CuteTool", fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
@@ -736,8 +983,21 @@ private fun CuteToolLink(title: String, url: String, onOpen: () -> Unit) {
 }
 
 @Composable
-fun SegButton(text: String, selected: Boolean, onClick: () -> Unit) {
-    if (selected) Button(onClick = onClick) { Text(text) } else OutlinedButton(onClick = onClick) { Text(text) }
+fun SegButton(
+    text: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    if (selected) {
+        Button(onClick = onClick, shape = ExpressiveShapes.button, modifier = modifier) {
+            Text(text, maxLines = 1)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, shape = ExpressiveShapes.button, modifier = modifier) {
+            Text(text, maxLines = 1)
+        }
+    }
 }
 
 @Composable

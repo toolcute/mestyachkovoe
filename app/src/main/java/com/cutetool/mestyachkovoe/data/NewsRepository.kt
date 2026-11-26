@@ -205,7 +205,7 @@ class NewsRepository {
             connectTimeout = 6000
             readTimeout = 8000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Mestyachkovoe/1.19 (+https://github.com/toolcute/mestyachkovoe)")
+            setRequestProperty("User-Agent", "Mestyachkovoe/1.20 (+https://github.com/toolcute/mestyachkovoe)")
             setRequestProperty("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
             setRequestProperty("Accept-Encoding", "gzip")
         }

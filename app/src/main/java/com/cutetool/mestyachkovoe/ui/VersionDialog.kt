@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.cutetool.mestyachkovoe.ui.theme.ExpressiveShapes
 import com.cutetool.mestyachkovoe.updates.UpdateManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -78,26 +79,11 @@ private val VersionStatus.infoOrNull: UpdateManager.UpdateInfo?
         else -> null
     }
 
-private val HeroShape = RoundedCornerShape(
-    topStart = 34.dp,
-    topEnd = 10.dp,
-    bottomEnd = 34.dp,
-    bottomStart = 10.dp
-)
+private val HeroShape = ExpressiveShapes.hero
 
-private val AccentShape = RoundedCornerShape(
-    topStart = 8.dp,
-    topEnd = 24.dp,
-    bottomEnd = 8.dp,
-    bottomStart = 24.dp
-)
+private val AccentShape = ExpressiveShapes.tile
 
-private val ChangelogShape = RoundedCornerShape(
-    topStart = 22.dp,
-    topEnd = 6.dp,
-    bottomEnd = 22.dp,
-    bottomStart = 6.dp
-)
+private val ChangelogShape = ExpressiveShapes.card
 
 @Composable
 fun VersionDialog(onClose: () -> Unit) {
@@ -209,12 +195,7 @@ fun VersionDialog(onClose: () -> Unit) {
 
     Dialog(onDismissRequest = onClose) {
         Surface(
-            shape = RoundedCornerShape(
-                topStart = 36.dp,
-                topEnd = 12.dp,
-                bottomEnd = 36.dp,
-                bottomStart = 16.dp
-            ),
+            shape = ExpressiveShapes.hero,
             tonalElevation = 6.dp
         ) {
             Column(

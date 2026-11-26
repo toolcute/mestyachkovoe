@@ -32,6 +32,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.cutetool.mestyachkovoe.AppLabelManager
 import com.cutetool.mestyachkovoe.data.*
+import com.cutetool.mestyachkovoe.ui.theme.ExpressiveShapes
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -298,43 +299,49 @@ private fun SourceRow(
     onToggle: (Boolean) -> Unit,
     onDelete: (() -> Unit)?
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        shape = ExpressiveShapes.tile,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    source.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (source.verified) {
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = "Проверенный источник",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(15.dp)
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        source.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    if (source.verified) {
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Проверенный источник",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+                Text(
+                    "${source.district.title} • ${source.url}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = "Удалить источник")
                 }
             }
-            Text(
-                "${source.district.title} • ${source.url}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Switch(checked = enabled, onCheckedChange = onToggle)
         }
-        if (onDelete != null) {
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Удалить источник")
-            }
-        }
-        Switch(checked = enabled, onCheckedChange = onToggle)
     }
 }
 
@@ -359,6 +366,7 @@ private fun AddSourceForm(
             onValueChange = { url = it; error = null },
             label = { Text("RSS-ссылка") },
             singleLine = true,
+            shape = ExpressiveShapes.tile,
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
@@ -366,6 +374,7 @@ private fun AddSourceForm(
             onValueChange = { name = it },
             label = { Text("Название (необязательно)") },
             singleLine = true,
+            shape = ExpressiveShapes.tile,
             modifier = Modifier.fillMaxWidth()
         )
         EnumDropdown(
@@ -402,6 +411,7 @@ private fun AddSourceForm(
                     }
                 }
             },
+            shape = ExpressiveShapes.button,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Добавить источник")
@@ -503,6 +513,7 @@ private fun <T> EnumDropdown(
         Box {
             OutlinedButton(
                 onClick = { expanded = true },
+                shape = ExpressiveShapes.button,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(

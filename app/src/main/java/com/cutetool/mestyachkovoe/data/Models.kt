@@ -18,10 +18,10 @@ enum class FederalDistrict(
     VOLGA("Приволжье"),
     SIBERIA("Сибирь"),
     MOSCOW_OBLAST("Московская область"),
-    SOUTH("Юг России", DistrictStatus.TESTING),
+    SOUTH("Юг России"),
     NORTH_CAUCASUS("Северный Кавказ", DistrictStatus.SOON, false),
     NORTHWEST("СЗФО", DistrictStatus.TESTING),
-    FAR_EAST("Дальний Восток", DistrictStatus.SOON, false);
+    FAR_EAST("Дальний Восток");
 
     val regions: List<Region>
         get() = Region.entries.filter { it != Region.ALL && it.district == this }
@@ -109,7 +109,18 @@ enum class Region(val title: String) {
     OMSK("Омская"),
     TOMSK("Томская"),
     TYVA("Тыва"),
-    KHAKASSIA("Хакасия")
+    KHAKASSIA("Хакасия"),
+
+    // Дальний Восток
+    PRIMORSKY("Приморский край"),
+    KHABAROVSK("Хабаровский край"),
+    AMUR("Амурская"),
+    MAGADAN("Магаданская"),
+    SAKHALIN("Сахалинская"),
+    JEWISH_AO("Еврейская АО"),
+    KAMCHATKA("Камчатский край"),
+    CHUKOTKA("Чукотский АО"),
+    SAKHA("Якутия")
 }
 
 val Region.district: FederalDistrict
@@ -188,6 +199,16 @@ val Region.district: FederalDistrict
         Region.TOMSK,
         Region.TYVA,
         Region.KHAKASSIA -> FederalDistrict.SIBERIA
+
+        Region.PRIMORSKY,
+        Region.KHABAROVSK,
+        Region.AMUR,
+        Region.MAGADAN,
+        Region.SAKHALIN,
+        Region.JEWISH_AO,
+        Region.KAMCHATKA,
+        Region.CHUKOTKA,
+        Region.SAKHA -> FederalDistrict.FAR_EAST
     }
 
 enum class ThemeMode(val title: String) { MONET("Monet"), MONO("Ч/Б (Тёмная)"), LIGHT("Светлая") }
@@ -561,6 +582,56 @@ object Sources {
         FeedSource("Google Новости: Симферополь", googleNews("Симферополь новости"), Region.CRIMEA, FederalDistrict.SOUTH),
         FeedSource("Google Новости: Майкоп", googleNews("Майкоп новости"), Region.ADYGEYA, FederalDistrict.SOUTH),
         FeedSource("Google Новости: Элиста", googleNews("Элиста новости"), Region.KALMYKIA, FederalDistrict.SOUTH),
+
+        // Дальний Восток
+        FeedSource("Вести Приморье", "https://vestiprim.ru/rss", Region.PRIMORSKY, FederalDistrict.FAR_EAST),
+        FeedSource("PrimaMedia", "https://primamedia.ru/rss/", Region.PRIMORSKY, FederalDistrict.FAR_EAST),
+        FeedSource("VL.ru", "https://www.newsvl.ru/rss/", Region.PRIMORSKY, FederalDistrict.FAR_EAST),
+        FeedSource("Vladnews", "https://vladnews.ru/rss", Region.PRIMORSKY, FederalDistrict.FAR_EAST),
+        FeedSource("КП Владивосток", "https://vladivostok.kp.ru/rss/all.xml", Region.PRIMORSKY, FederalDistrict.FAR_EAST),
+        FeedSource("АиФ Владивосток", "https://vladivostok.aif.ru/rss/all.php", Region.PRIMORSKY, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Приморский край", googleNews("Приморский край новости"), Region.PRIMORSKY, FederalDistrict.FAR_EAST),
+        FeedSource("AmurMedia", "https://amurmedia.ru/rss/", Region.KHABAROVSK, FederalDistrict.FAR_EAST),
+        FeedSource("Губерния", "https://gubernia.com/rss", Region.KHABAROVSK, FederalDistrict.FAR_EAST),
+        FeedSource("DVHab", "https://dvhab.ru/rss", Region.KHABAROVSK, FederalDistrict.FAR_EAST),
+        FeedSource("КП Хабаровск", "https://habarovsk.kp.ru/rss/all.xml", Region.KHABAROVSK, FederalDistrict.FAR_EAST),
+        FeedSource("АиФ Хабаровск", "https://habarovsk.aif.ru/rss/all.php", Region.KHABAROVSK, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Хабаровский край", googleNews("Хабаровский край новости"), Region.KHABAROVSK, FederalDistrict.FAR_EAST),
+        FeedSource("Амурская правда", "https://ampravda.ru/rss", Region.AMUR, FederalDistrict.FAR_EAST),
+        FeedSource("Амур.инфо", "https://amur.info/rss", Region.AMUR, FederalDistrict.FAR_EAST),
+        FeedSource("Порт Амур", "https://portamur.ru/rss", Region.AMUR, FederalDistrict.FAR_EAST),
+        FeedSource("Телепорт", "https://teleport.media/rss", Region.AMUR, FederalDistrict.FAR_EAST),
+        FeedSource("АиФ Благовещенск", "https://blagoveshchensk.aif.ru/rss/all.php", Region.AMUR, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Амурская область", googleNews("Амурская область новости"), Region.AMUR, FederalDistrict.FAR_EAST),
+        FeedSource("Колыма.ру", "https://kolyma.ru/rss", Region.MAGADAN, FederalDistrict.FAR_EAST),
+        FeedSource("Магаданская правда", "https://magadanpravda.ru/rss", Region.MAGADAN, FederalDistrict.FAR_EAST),
+        FeedSource("Вечерний Магадан", "https://vecherniy.kolyma.ru/rss", Region.MAGADAN, FederalDistrict.FAR_EAST),
+        FeedSource("ГТРК Магадан", "https://gtrkmagadan.ru/rss", Region.MAGADAN, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Магаданская область", googleNews("Магаданская область новости"), Region.MAGADAN, FederalDistrict.FAR_EAST),
+        FeedSource("Sakhalin.info", "https://sakhalin.info/rss", Region.SAKHALIN, FederalDistrict.FAR_EAST),
+        FeedSource("АСТВ", "https://astv.ru/rss", Region.SAKHALIN, FederalDistrict.FAR_EAST),
+        FeedSource("Сахалинская газета", "https://sakhgazeta.ru/rss", Region.SAKHALIN, FederalDistrict.FAR_EAST),
+        FeedSource("Правительство Сахалинской области", "https://sakhalin.gov.ru/rss", Region.SAKHALIN, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Сахалинская область", googleNews("Сахалинская область новости"), Region.SAKHALIN, FederalDistrict.FAR_EAST),
+        FeedSource("ЕАОMedia", "https://eaomedia.ru/rss/", Region.JEWISH_AO, FederalDistrict.FAR_EAST),
+        FeedSource("Биробиджанская звезда", "https://gazetaeao.ru/rss", Region.JEWISH_AO, FederalDistrict.FAR_EAST),
+        FeedSource("Город на Бире", "https://gorodnabire.ru/rss", Region.JEWISH_AO, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Еврейская АО", googleNews("Еврейская автономная область новости"), Region.JEWISH_AO, FederalDistrict.FAR_EAST),
+        FeedSource("Камчатка-Информ", "https://kamchat.info/rss", Region.KAMCHATKA, FederalDistrict.FAR_EAST),
+        FeedSource("Кам 24", "https://kam24.ru/rss", Region.KAMCHATKA, FederalDistrict.FAR_EAST),
+        FeedSource("Вести Камчатка", "https://vestikamchatka.ru/rss", Region.KAMCHATKA, FederalDistrict.FAR_EAST),
+        FeedSource("АиФ Камчатка", "https://kamchatka.aif.ru/rss/all.php", Region.KAMCHATKA, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Камчатский край", googleNews("Камчатский край новости"), Region.KAMCHATKA, FederalDistrict.FAR_EAST),
+        FeedSource("Чукотка.ру", "https://chukotka.ru/rss", Region.CHUKOTKA, FederalDistrict.FAR_EAST),
+        FeedSource("Крайний Север", "https://ks87.ru/rss", Region.CHUKOTKA, FederalDistrict.FAR_EAST),
+        FeedSource("ГТРК Чукотка", "https://gtrkchukotka.ru/rss", Region.CHUKOTKA, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Чукотский АО", googleNews("Чукотский автономный округ новости"), Region.CHUKOTKA, FederalDistrict.FAR_EAST),
+        FeedSource("ЯСИА", "https://ysia.ru/rss", Region.SAKHA, FederalDistrict.FAR_EAST),
+        FeedSource("SakhaLife", "https://sakhalife.ru/rss", Region.SAKHA, FederalDistrict.FAR_EAST),
+        FeedSource("News.Ykt.Ru", "https://news.ykt.ru/rss", Region.SAKHA, FederalDistrict.FAR_EAST),
+        FeedSource("Якутия24", "https://yakutia24.ru/rss", Region.SAKHA, FederalDistrict.FAR_EAST),
+        FeedSource("АиФ Якутск", "https://yakutsk.aif.ru/rss/all.php", Region.SAKHA, FederalDistrict.FAR_EAST),
+        FeedSource("Google Новости: Якутия", googleNews("Якутия новости"), Region.SAKHA, FederalDistrict.FAR_EAST),
     )
 
     fun forDistrict(district: FederalDistrict): List<FeedSource> =

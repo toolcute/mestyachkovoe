@@ -50,6 +50,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.cutetool.mestyachkovoe.data.NewsItem
 import com.cutetool.mestyachkovoe.data.NewsRepository
+import com.cutetool.mestyachkovoe.ui.theme.ExpressiveShapes
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -140,7 +141,7 @@ fun SearchDialog(
                                 }
                             },
                             singleLine = true,
-                            shape = RoundedCornerShape(24.dp, 10.dp, 24.dp, 10.dp),
+                            shape = ExpressiveShapes.card,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(onSearch = { runSearch() })
                         )
@@ -154,7 +155,7 @@ fun SearchDialog(
 
                     Spacer(Modifier.height(10.dp))
                     Surface(
-                        shape = RoundedCornerShape(18.dp, 6.dp, 18.dp, 6.dp),
+                        shape = ExpressiveShapes.tile,
                         color = MaterialTheme.colorScheme.tertiaryContainer
                     ) {
                         Row(

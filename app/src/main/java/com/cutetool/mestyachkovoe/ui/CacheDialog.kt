@@ -38,6 +38,7 @@ import com.cutetool.mestyachkovoe.cache.CacheManager
 import com.cutetool.mestyachkovoe.data.CacheAutoClean
 import com.cutetool.mestyachkovoe.data.SettingsRepository
 import com.cutetool.mestyachkovoe.data.UserSettings
+import com.cutetool.mestyachkovoe.ui.theme.ExpressiveShapes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -60,6 +61,7 @@ fun CacheDialog(
 
     AlertDialog(
         onDismissRequest = onClose,
+        shape = ExpressiveShapes.hero,
         title = { Text("Кеш", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(
@@ -74,7 +76,7 @@ fun CacheDialog(
                 )
 
                 Surface(
-                    shape = RoundedCornerShape(16.dp, 6.dp, 16.dp, 6.dp),
+                    shape = ExpressiveShapes.tile,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
                     Row(
@@ -112,6 +114,7 @@ fun CacheDialog(
                         }
                     },
                     enabled = !clearing,
+                    shape = ExpressiveShapes.button,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (clearing) "Очищаем…" else "Очистить кеш")
