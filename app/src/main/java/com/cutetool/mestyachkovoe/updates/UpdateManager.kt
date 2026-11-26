@@ -1,5 +1,6 @@
 package com.cutetool.mestyachkovoe.updates
 
+import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -126,6 +127,58 @@ object UpdateManager {
             if (remotePart != currentPart) return remotePart > currentPart
         }
         return false
+    }
+
+    data class DownloadProgress(
+        val status: Int,
+        val bytes: Long,
+        val total: Long,
+        val reason: Int,
+    ) {
+        val fraction: Float
+            get() = if (total > 0L) (bytes.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+    }
+
+    fun downloadedApkFile(context: Context, info: UpdateInfo): File {
+        val baseDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.filesDir
+        val dir = File(baseDir, "updates").apply { mkdirs() }
+        return File(dir, "mestyachkovoe-${info.tag.ifBlank { info.version }}.apk")
+    }
+
+    fun enqueueApkDownload(context: Context, info: UpdateInfo): Long {
+        val target = downloadedApkFile(context, info)
+        if (target.exists()) target.delete()
+        val request = DownloadManager.Request(Uri.parse(info.apkUrl)).apply {
+            setTitle("Обновление Местячкового ${info.version}")
+            setDescription("Загрузка APK…")
+            setMimeType("application/vnd.android.package-archive")
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            setDestinationInExternalFilesDir(
+                context,
+                Environment.DIRECTORY_DOWNLOADS,
+                "updates/${target.name}"
+            )
+            setAllowedOverMetered(true)
+            setAllowedOverRoaming(true)
+        }
+        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        return manager.enqueue(request)
+    }
+
+    fun downloadProgress(context: Context, id: Long): DownloadProgress {
+        val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val cursor = manager.query(DownloadManager.Query().setFilterById(id))
+            ?: return DownloadProgress(DownloadManager.STATUS_FAILED, 0L, 0L, 0)
+        cursor.use {
+            if (!it.moveToFirst()) {
+                return DownloadProgress(DownloadManager.STATUS_FAILED, 0L, 0L, 0)
+            }
+            val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            val bytes = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+            val total = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+            val reason = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+            return DownloadProgress(status, bytes, total, reason)
+        }
     }
 
     suspend fun downloadApk(context: Context, info: UpdateInfo): File = withContext(Dispatchers.IO) {

@@ -3,6 +3,15 @@ package com.cutetool.mestyachkovoe.ui
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,19 +22,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,6 +47,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,6 +62,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -105,12 +121,7 @@ fun FavoritesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        if (showFullCid) "Мой CuteID" else "Мой CID",
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
+                title = { AnimatedCidTitle(showFullCid) },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
@@ -214,177 +225,324 @@ private fun CidAccountSection(
     var error by remember { mutableStateOf<String?>(null) }
     val pending = !settings.cidLinked && !settings.cidSession.isNullOrBlank()
     val valid = CuteIdRepository.isValidNickname(nickname)
+    val avatarLetter = (settings.cidNickname?.firstOrNull() ?: nickname.firstOrNull() ?: 'C')
+        .uppercaseChar()
+    val shape = RoundedCornerShape(28.dp)
+    val gradient = Brush.linearGradient(
+        listOf(
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.tertiaryContainer
+        )
+    )
 
     Card(
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        Column(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "CuteID (CID)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        if (settings.cidLinked) {
-                            "Любимое синхронизируется между устройствами"
-                        } else {
-                            "Необязательно. Можно переносить любимое между устройствами."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+        Box(Modifier.fillMaxWidth().clip(shape).background(gradient)) {
+            Box(
+                Modifier
+                    .size(170.dp)
+                    .offset(x = (-60).dp, y = (-70).dp)
+                    .background(Color.White.copy(alpha = 0.13f), CircleShape)
+            )
+            Box(
+                Modifier
+                    .size(110.dp)
+                    .offset(x = 270.dp, y = 120.dp)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), CircleShape)
+            )
+            Column(
+                Modifier.fillMaxWidth().padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .border(2.dp, Color.White.copy(alpha = 0.35f), CircleShape)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                avatarLetter.toString(),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "CuteID",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            if (settings.cidLinked) {
+                                "Любимое синхронизируется между устройствами"
+                            } else {
+                                "Один CID для всех ваших устройств"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                    CidStatusPill(linked = settings.cidLinked, pending = pending)
                 }
-            }
 
-            if (settings.cidLinked) {
-                Text(
-                    "Вы вошли как ${settings.cidNickname ?: "—"}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                settings.cidTgId?.let {
+                if (settings.cidLinked) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.38f)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    settings.cidNickname ?: "—",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                settings.cidTgId?.let {
+                                    Text(
+                                        "Telegram ID: $it",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = nickname,
+                        onValueChange = {
+                            nickname = it.filter { ch -> ch in 'a'..'z' || ch in 'A'..'Z' }
+                            error = null
+                        },
+                        label = { Text("Сменить имя CuteID") },
+                        singleLine = true,
+                        isError = error != null,
+                        supportingText = {
+                            Text(error ?: "4–9 английских букв")
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = cidFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                val clean = nickname.trim()
+                                error = if (CuteIdRepository.isValidNickname(clean)) {
+                                    null
+                                } else {
+                                    "Нужно 4–9 английских букв"
+                                }
+                                if (error == null) {
+                                    scope.launch {
+                                        settingsRepo.setCidNickname(clean)
+                                        onSync()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Сохранить")
+                        }
+                        OutlinedButton(
+                            onClick = { onSync() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Синхр.")
+                        }
+                    }
+                } else {
                     Text(
-                        "Telegram ID: $it",
-                        style = MaterialTheme.typography.bodySmall,
+                        "Войдите, чтобы лайки и любимые источники переезжали вместе с вами. Это необязательно.",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                }
-                OutlinedTextField(
-                    value = nickname,
-                    onValueChange = {
-                        nickname = it.filter { ch -> ch in 'a'..'z' || ch in 'A'..'Z' }
-                        error = null
-                    },
-                    label = { Text("Новое имя (4–9 английских букв)") },
-                    singleLine = true,
-                    isError = error != null,
-                    supportingText = {
-                        Text(error ?: "Только латиница: ^[a-zA-Z]{4,9}$")
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = nickname,
+                        onValueChange = {
+                            nickname = it.filter { ch -> ch in 'a'..'z' || ch in 'A'..'Z' }
+                            error = null
+                        },
+                        label = { Text("Имя CuteID") },
+                        placeholder = { Text("Например: Cute") },
+                        singleLine = true,
+                        isError = nickname.isNotBlank() && !valid,
+                        supportingText = {
+                            Text(
+                                if (nickname.isNotBlank() && !valid) {
+                                    "Нужно 4–9 английских букв"
+                                } else {
+                                    "4–9 английских букв, например Cute"
+                                }
+                            )
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = cidFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    error?.let {
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                     Button(
                         onClick = {
                             val clean = nickname.trim()
-                            error = if (CuteIdRepository.isValidNickname(clean)) {
-                                null
-                            } else {
-                                "Нужно 4–9 английских букв"
+                            if (!CuteIdRepository.isValidNickname(clean)) {
+                                error = "Нужно 4–9 английских букв"
+                                return@Button
                             }
-                            if (error == null) {
-                                scope.launch {
-                                    settingsRepo.setCidNickname(clean)
-                                    onSync()
-                                }
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Сменить имя")
-                    }
-                    OutlinedButton(
-                        onClick = { onSync() },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Синхронизировать")
-                    }
-                }
-            } else {
-                OutlinedTextField(
-                    value = nickname,
-                    onValueChange = {
-                        nickname = it.filter { ch -> ch in 'a'..'z' || ch in 'A'..'Z' }
-                        error = null
-                    },
-                    label = { Text("Имя CuteID") },
-                    placeholder = { Text("Например: Cutis") },
-                    singleLine = true,
-                    isError = nickname.isNotBlank() && !valid,
-                    supportingText = {
-                        Text(
-                            if (nickname.isNotBlank() && !valid) {
-                                "Нужно 4–9 английских букв"
-                            } else {
-                                "4–9 английских букв, например Cutis"
-                            }
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                error?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                }
-                Button(
-                    onClick = {
-                        val clean = nickname.trim()
-                        if (!CuteIdRepository.isValidNickname(clean)) {
-                            error = "Нужно 4–9 английских букв"
-                            return@Button
-                        }
-                        error = null
-                        val session = CuteIdRepository.newSessionToken()
-                        scope.launch {
-                            settingsRepo.beginCidAuth(clean, session)
-                            val username = CuteIdRepository.botUsername()
-                            openTelegram(
-                                context,
-                                CuteIdRepository.authUrl(username, session, clean)
-                            )
-                        }
-                    },
-                    enabled = valid,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Войти через Telegram")
-                }
-                if (pending) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ExpressiveLoadingIndicator(size = 18.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Ожидаем подтверждение в Telegram…",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                    TextButton(
-                        onClick = {
-                            val session = settings.cidSession ?: return@TextButton
-                            val nick = settings.cidNickname ?: return@TextButton
+                            error = null
+                            val session = CuteIdRepository.newSessionToken()
                             scope.launch {
+                                settingsRepo.beginCidAuth(clean, session)
                                 val username = CuteIdRepository.botUsername()
                                 openTelegram(
                                     context,
-                                    CuteIdRepository.authUrl(username, session, nick)
+                                    CuteIdRepository.authUrl(username, session, clean)
                                 )
                             }
-                        }
+                        },
+                        enabled = valid,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Открыть Telegram снова")
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Войти через Telegram")
+                    }
+                    if (pending) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.38f)
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ExpressiveLoadingIndicator(size = 18.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "Ищем сессию CuteID…",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        "Проверяем подтверждение каждые 2 секунды",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        TextButton(
+                            onClick = {
+                                val session = settings.cidSession ?: return@TextButton
+                                val nick = settings.cidNickname ?: return@TextButton
+                                scope.launch {
+                                    val username = CuteIdRepository.botUsername()
+                                    openTelegram(
+                                        context,
+                                        CuteIdRepository.authUrl(username, session, nick)
+                                    )
+                                }
+                            }
+                        ) {
+                            Text("Открыть Telegram снова")
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CidStatusPill(linked: Boolean, pending: Boolean) {
+    val text = when {
+        linked -> "Подключено"
+        pending -> "Ожидание"
+        else -> "Не подключено"
+    }
+    val color = when {
+        linked -> MaterialTheme.colorScheme.primary
+        pending -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(shape = CircleShape, color = color.copy(alpha = 0.16f)) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = color
+        )
+    }
+}
+
+@Composable
+private fun cidFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.28f),
+    focusedLabelColor = MaterialTheme.colorScheme.primary,
+    unfocusedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+    cursorColor = MaterialTheme.colorScheme.primary,
+)
+
+@Composable
+private fun AnimatedCidTitle(showFull: Boolean) {
+    val style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Мой ", style = style)
+        Text("C", style = style)
+        AnimatedVisibility(
+            visible = showFull,
+            enter = expandHorizontally(
+                expandFrom = Alignment.Start,
+                animationSpec = tween(520, easing = FastOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(320, delayMillis = 90)),
+            exit = shrinkHorizontally(
+                shrinkTowards = Alignment.Start,
+                animationSpec = tween(200, easing = FastOutSlowInEasing)
+            ) + fadeOut(animationSpec = tween(160))
+        ) {
+            Text("ute", style = style)
+        }
+        Text("ID", style = style)
     }
 }
 

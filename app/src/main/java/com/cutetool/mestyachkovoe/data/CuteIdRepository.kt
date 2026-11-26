@@ -1,13 +1,16 @@
 package com.cutetool.mestyachkovoe.data
 
+import android.util.Base64
+import com.cutetool.mestyachkovoe.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import kotlin.random.Random
 
 data class CidAuthData(
@@ -18,20 +21,29 @@ data class CidAuthData(
 )
 
 /**
- * CuteID (CID) authorization and sync over the Telegram bot.
- * No external server is needed: the bot carries the auth marker and the sync payload.
+ * CuteID (CID) authorization and sync.
+ *
+ * The Telegram bot on the server consumes /start through getUpdates, so the app
+ * reads the session from toolcute/CuteID/users.json through the GitHub Contents
+ * API and writes user data back with a PUT request.
  */
 object CuteIdRepository {
     const val BOT_TOKEN = "9151476410:AAGACgh6qbvBAbcEjDwHNGwELvowCdOtGcs"
     const val BOT_USERNAME_FALLBACK = "CuteIDBot"
 
-    private const val API_BASE = "https://api.telegram.org/bot$BOT_TOKEN"
-    private const val AUTH_MARKER = "CID_DATA:"
+    private const val TELEGRAM_API = "https://api.telegram.org/bot$BOT_TOKEN"
+    private const val GITHUB_USERS_URL =
+        "https://api.github.com/repos/toolcute/CuteID/contents/users.json"
+    private val GITHUB_TOKEN = BuildConfig.CUTEID_GITHUB_TOKEN
+    private const val GITHUB_ACCEPT = "application/vnd.github+json"
     private const val SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
     private const val USER_AGENT = "Mestyachkovoe/1.19 (+https://github.com/toolcute/mestyachkovoe)"
 
     private val nicknameRegex = Regex("^[a-zA-Z]{4,9}$")
+    private val syncMutex = Mutex()
     private var cachedBotUsername: String? = null
+
+    private data class UsersFile(val sha: String, val json: JSONObject)
 
     fun isValidNickname(nickname: String): Boolean = nicknameRegex.matches(nickname.trim())
 
@@ -41,8 +53,10 @@ object CuteIdRepository {
     suspend fun botUsername(): String = withContext(Dispatchers.IO) {
         cachedBotUsername?.let { return@withContext it }
         val username = runCatching {
-            val json = getJson("$API_BASE/getMe")
-            json.optJSONObject("result")?.optString("username").orEmpty()
+            telegramGetJson("$TELEGRAM_API/getMe")
+                ?.optJSONObject("result")
+                ?.optString("username")
+                .orEmpty()
         }.getOrDefault("")
         val resolved = username.ifBlank { BOT_USERNAME_FALLBACK }
         cachedBotUsername = resolved
@@ -53,66 +67,100 @@ object CuteIdRepository {
         "https://t.me/$username?start=auth_${session}_$nickname"
 
     /**
-     * Looks through recent bot updates for the auth marker matching [session].
+     * Reads users.json and returns the session entry created by the bot.
      */
     suspend fun pollForAuth(session: String): CidAuthData? = withContext(Dispatchers.IO) {
-        val json = runCatching { getJson("$API_BASE/getUpdates?limit=100&timeout=0") }
-            .getOrNull() ?: return@withContext null
-        val updates = json.optJSONArray("result") ?: return@withContext null
-        for (i in 0 until updates.length()) {
-            val update = updates.optJSONObject(i) ?: continue
-            val message = update.optJSONObject("message")
-                ?: update.optJSONObject("edited_message")
-                ?: continue
-            val text = message.optString("text")
-            val markerIndex = text.indexOf(AUTH_MARKER)
-            if (markerIndex < 0) continue
-            val payload = extractJsonObject(text.substring(markerIndex + AUTH_MARKER.length))
-                ?: continue
-            val obj = runCatching { JSONObject(payload) }.getOrNull() ?: continue
-            if (!obj.optBoolean("cid_auth")) continue
-            if (obj.optString("session") != session) continue
-            val tgId = obj.optLong("tg_id", 0L)
-                .takeIf { it > 0L }
-                ?: message.optJSONObject("from")?.optLong("id", 0L)
-                ?: 0L
-            if (tgId <= 0L) continue
-            val nickname = obj.optString("nickname").trim()
-                .ifBlank { obj.optJSONObject("from")?.optString("username").orEmpty() }
-            return@withContext CidAuthData(
-                tgId = tgId,
-                nickname = nickname,
-                savedPosts = toStringList(obj.optJSONArray("saved_posts")),
-                savedSources = toStringList(obj.optJSONArray("saved_sources")),
-            )
-        }
-        null
+        val usersFile = fetchUsersFile() ?: return@withContext null
+        val sessions = usersFile.json.optJSONObject("sessions") ?: return@withContext null
+        val rawEntry = sessions.opt(session) ?: return@withContext null
+        val entry = when (rawEntry) {
+            is JSONObject -> rawEntry
+            is String -> runCatching { JSONObject(rawEntry) }.getOrNull()
+            else -> null
+        } ?: return@withContext null
+        val payload = entry.optJSONObject("data") ?: entry
+
+        val tgId = optLong(payload, "tg_id")
+            ?: optLong(entry, "tg_id")
+            ?: optLong(payload, "telegram_id")
+            ?: 0L
+        if (tgId <= 0L) return@withContext null
+
+        val nickname = payload.optString("nickname").trim()
+            .ifBlank { entry.optString("nickname").trim() }
+        CidAuthData(
+            tgId = tgId,
+            nickname = nickname,
+            savedPosts = toStringList(payload.optJSONArray("saved_posts")),
+            savedSources = toStringList(payload.optJSONArray("saved_sources")),
+        )
     }
 
     /**
-     * Pushes the current CID_SYNC package into the bot chat so it can update
-     * toolcute/CuteID/users.json.
+     * Writes the current CID_SYNC package into json["users"][tg_id].
      */
     suspend fun sendSync(settings: UserSettings): Boolean = withContext(Dispatchers.IO) {
-        val nickname = settings.cidNickname?.takeIf { it.isNotBlank() } ?: return@withContext false
+        val nickname = settings.cidNickname?.takeIf { it.isNotBlank() }
+            ?: return@withContext false
         val tgId = settings.cidTgId ?: return@withContext false
         if (tgId <= 0L) return@withContext false
 
-        val payload = JSONObject()
-            .put("nickname", nickname)
-            .put("saved_posts", JSONArray(settings.savedPosts.map { it.title }))
-            .put("saved_sources", JSONArray(settings.savedSources.toList()))
-        val text = "CID_SYNC:$payload"
-
-        runCatching {
-            val body = buildString {
-                append("chat_id=").append(URLEncoder.encode(tgId.toString(), "UTF-8"))
-                append("&text=").append(URLEncoder.encode(text, "UTF-8"))
-                append("&disable_web_page_preview=true")
+        syncMutex.withLock {
+            repeat(3) {
+                if (pushUserOnce(tgId, nickname, settings)) return@withLock true
             }
-            val json = postForm("$API_BASE/sendMessage", body)
-            json.optBoolean("ok")
-        }.getOrDefault(false)
+            false
+        }
+    }
+
+    private fun pushUserOnce(tgId: Long, nickname: String, settings: UserSettings): Boolean {
+        val usersFile = fetchUsersFile() ?: return false
+        val root = usersFile.json
+        val users = root.optJSONObject("users") ?: JSONObject().also { root.put("users", it) }
+        val user = users.optJSONObject(tgId.toString()) ?: JSONObject()
+        user.put("tg_id", tgId)
+        user.put("nickname", nickname)
+        user.put("saved_posts", JSONArray(settings.savedPosts.map { it.title }))
+        user.put("saved_sources", JSONArray(settings.savedSources.toList()))
+        user.put("updated_at", System.currentTimeMillis())
+        users.put(tgId.toString(), user)
+
+        val encoded = Base64.encodeToString(
+            root.toString(2).toByteArray(Charsets.UTF_8),
+            Base64.NO_WRAP
+        )
+        val body = JSONObject()
+            .put("message", "CuteID: sync $nickname")
+            .put("content", encoded)
+            .put("sha", usersFile.sha)
+        val response = githubRequest("PUT", GITHUB_USERS_URL, body) ?: return false
+        return response.has("content") || response.has("commit")
+    }
+
+    private fun fetchUsersFile(): UsersFile? {
+        val json = githubRequest(
+            "GET",
+            "$GITHUB_USERS_URL?t=${System.currentTimeMillis()}",
+            null
+        ) ?: return null
+        val content = json.optString("content")
+        val sha = json.optString("sha")
+        if (content.isBlank() || sha.isBlank()) return null
+        val raw = runCatching {
+            String(Base64.decode(content, Base64.DEFAULT), Charsets.UTF_8)
+        }.getOrNull() ?: return null
+        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        return UsersFile(sha, root)
+    }
+
+    private fun optLong(obj: JSONObject, key: String): Long? {
+        if (!obj.has(key) || obj.isNull(key)) return null
+        val value = obj.opt(key)
+        return when (value) {
+            is Number -> value.toLong()
+            is String -> value.toLongOrNull()
+            else -> null
+        }?.takeIf { it > 0L }
     }
 
     private fun toStringList(array: JSONArray?): List<String> {
@@ -122,35 +170,36 @@ object CuteIdRepository {
         }
     }
 
-    private fun extractJsonObject(raw: String): String? {
-        val start = raw.indexOf('{')
-        if (start < 0) return null
-        var depth = 0
-        var inString = false
-        var escaped = false
-        for (i in start until raw.length) {
-            val ch = raw[i]
-            if (inString) {
-                when {
-                    escaped -> escaped = false
-                    ch == '\\' -> escaped = true
-                    ch == '"' -> inString = false
-                }
-                continue
-            }
-            when (ch) {
-                '"' -> inString = true
-                '{' -> depth++
-                '}' -> {
-                    depth--
-                    if (depth == 0) return raw.substring(start, i + 1)
-                }
-            }
+    private fun githubRequest(method: String, url: String, body: JSONObject?): JSONObject? {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 12000
+            readTimeout = 15000
+            instanceFollowRedirects = true
+            setRequestProperty("Authorization", "Bearer $GITHUB_TOKEN")
+            setRequestProperty("Accept", GITHUB_ACCEPT)
+            setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+            setRequestProperty("User-Agent", USER_AGENT)
         }
-        return null
+        try {
+            if (body != null) {
+                connection.doOutput = true
+                connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            }
+            val code = connection.responseCode
+            val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) throw IOException("GitHub API вернул код $code")
+            return JSONObject(raw)
+        } catch (_: Exception) {
+            return null
+        } finally {
+            connection.disconnect()
+        }
     }
 
-    private fun getJson(url: String): JSONObject {
+    private fun telegramGetJson(url: String): JSONObject? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 10000
             readTimeout = 12000
@@ -158,33 +207,13 @@ object CuteIdRepository {
             setRequestProperty("User-Agent", USER_AGENT)
             setRequestProperty("Accept", "application/json")
         }
-        try {
+        return try {
             val code = connection.responseCode
             val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw IOException("Telegram API вернул код $code")
-            return JSONObject(raw)
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun postForm(url: String, body: String): JSONObject {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            connectTimeout = 10000
-            readTimeout = 12000
-            setRequestProperty("User-Agent", USER_AGENT)
-            setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-        }
-        try {
-            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            val code = connection.responseCode
-            val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw IOException("Telegram API вернул код $code")
-            return JSONObject(raw)
+            if (code !in 200..299) null else JSONObject(raw)
+        } catch (_: Exception) {
+            null
         } finally {
             connection.disconnect()
         }

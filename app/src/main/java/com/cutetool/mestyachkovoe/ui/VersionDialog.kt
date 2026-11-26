@@ -1,5 +1,9 @@
 ﻿package com.cutetool.mestyachkovoe.ui
 
+import android.app.DownloadManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,11 +22,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -46,17 +53,30 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.cutetool.mestyachkovoe.updates.UpdateManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 
 private sealed interface VersionStatus {
     data object Idle : VersionStatus
     data object Checking : VersionStatus
     data object UpToDate : VersionStatus
-    data object Downloading : VersionStatus
-    data object InstallerOpened : VersionStatus
-    data class NeedsPermission(val info: UpdateManager.UpdateInfo) : VersionStatus
+    data class Available(val info: UpdateManager.UpdateInfo) : VersionStatus
+    data class Downloading(val info: UpdateManager.UpdateInfo, val progress: Float) : VersionStatus
+    data class NeedsPermission(val info: UpdateManager.UpdateInfo, val file: File?) : VersionStatus
+    data class InstallerOpened(val info: UpdateManager.UpdateInfo) : VersionStatus
     data class Error(val message: String) : VersionStatus
 }
+
+private val VersionStatus.infoOrNull: UpdateManager.UpdateInfo?
+    get() = when (this) {
+        is VersionStatus.Available -> info
+        is VersionStatus.Downloading -> info
+        is VersionStatus.NeedsPermission -> info
+        is VersionStatus.InstallerOpened -> info
+        else -> null
+    }
 
 private val HeroShape = RoundedCornerShape(
     topStart = 34.dp,
@@ -88,6 +108,9 @@ fun VersionDialog(onClose: () -> Unit) {
     var releases by remember { mutableStateOf<List<UpdateManager.ReleaseNote>>(emptyList()) }
     var changelogLoading by remember { mutableStateOf(true) }
     var changelogError by remember { mutableStateOf<String?>(null) }
+    var latestInfo by remember { mutableStateOf<UpdateManager.UpdateInfo?>(null) }
+    var downloadId by remember { mutableStateOf<Long?>(null) }
+    var downloadInfo by remember { mutableStateOf<UpdateManager.UpdateInfo?>(null) }
     val busy = status is VersionStatus.Checking || status is VersionStatus.Downloading
 
     fun loadChangelog() {
@@ -104,8 +127,14 @@ fun VersionDialog(onClose: () -> Unit) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        loadChangelog()
+    fun openInstaller(info: UpdateManager.UpdateInfo, file: File) {
+        status = if (!UpdateManager.canInstall(context)) {
+            VersionStatus.NeedsPermission(info, file)
+        } else if (UpdateManager.install(context, file)) {
+            VersionStatus.InstallerOpened(info)
+        } else {
+            VersionStatus.NeedsPermission(info, file)
+        }
     }
 
     fun checkForUpdates() {
@@ -113,22 +142,67 @@ fun VersionDialog(onClose: () -> Unit) {
             status = VersionStatus.Checking
             try {
                 val info = UpdateManager.latestRelease()
-                when {
-                    info == null -> status = VersionStatus.Error("В релизах не найден APK-файл.")
-                    !UpdateManager.isNewer(info.version, currentVersion) -> status = VersionStatus.UpToDate
-                    !UpdateManager.canInstall(context) -> status = VersionStatus.NeedsPermission(info)
-                    else -> {
-                        status = VersionStatus.Downloading
-                        val file = UpdateManager.downloadApk(context, info)
-                        status = if (UpdateManager.install(context, file)) {
-                            VersionStatus.InstallerOpened
-                        } else {
-                            VersionStatus.NeedsPermission(info)
-                        }
-                    }
+                latestInfo = info
+                status = when {
+                    info == null -> VersionStatus.Error("В релизах не найден APK-файл.")
+                    !UpdateManager.isNewer(info.version, currentVersion) -> VersionStatus.UpToDate
+                    else -> VersionStatus.Available(info)
                 }
             } catch (e: Exception) {
+                latestInfo = null
                 status = VersionStatus.Error(e.message ?: "Не удалось проверить обновления")
+            }
+        }
+    }
+
+    fun startDownload(info: UpdateManager.UpdateInfo) {
+        if (status is VersionStatus.Downloading) return
+        scope.launch {
+            try {
+                val existing = UpdateManager.downloadedApkFile(context, info)
+                if (existing.exists() && existing.length() > 0L) {
+                    status = VersionStatus.Downloading(info, 1f)
+                    openInstaller(info, existing)
+                    return@launch
+                }
+                downloadInfo = info
+                val id = UpdateManager.enqueueApkDownload(context, info)
+                downloadId = id
+                status = VersionStatus.Downloading(info, 0f)
+            } catch (e: Exception) {
+                status = VersionStatus.Error(e.message ?: "Не удалось начать загрузку APK")
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadChangelog()
+        checkForUpdates()
+    }
+
+    LaunchedEffect(downloadId) {
+        val id = downloadId ?: return@LaunchedEffect
+        val info = downloadInfo ?: return@LaunchedEffect
+        while (isActive) {
+            delay(500)
+            val progress = UpdateManager.downloadProgress(context, id)
+            status = VersionStatus.Downloading(info, progress.fraction)
+            when (progress.status) {
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    val file = UpdateManager.downloadedApkFile(context, info)
+                    if (file.exists() && file.length() > 0L) {
+                        openInstaller(info, file)
+                    } else {
+                        status = VersionStatus.Error("APK скачан, но файл не найден.")
+                    }
+                    downloadId = null
+                    return@LaunchedEffect
+                }
+                DownloadManager.STATUS_FAILED -> {
+                    status = VersionStatus.Error("Загрузка APK не удалась (код ${progress.reason}).")
+                    downloadId = null
+                    return@LaunchedEffect
+                }
             }
         }
     }
@@ -146,7 +220,7 @@ fun VersionDialog(onClose: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 660.dp)
+                    .heightIn(max = 720.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -173,23 +247,18 @@ fun VersionDialog(onClose: () -> Unit) {
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "Версия $currentVersion",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            "Версия $currentVersion",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                     Surface(
                         onClick = onClose,
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.tertiaryContainer
                     ) {
-                        Box(
-                            Modifier.size(38.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Закрыть",
@@ -200,14 +269,9 @@ fun VersionDialog(onClose: () -> Unit) {
                     }
                 }
 
-                Surface(
-                    shape = AccentShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
+                Surface(shape = AccentShape, color = MaterialTheme.colorScheme.secondaryContainer) {
                     Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -224,7 +288,7 @@ fun VersionDialog(onClose: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             Text(
-                                "Ченжлог подтягивается автоматически",
+                                "APK скачивается системным загрузчиком",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
@@ -239,9 +303,29 @@ fun VersionDialog(onClose: () -> Unit) {
                     }
                 }
 
-                StatusBlock(status = status, onOpenSettings = {
-                    UpdateManager.openInstallPermissionSettings(context)
-                })
+                latestInfo?.let { info ->
+                    val displayStatus = status.infoOrNull?.let { status }
+                        ?: VersionStatus.Available(info)
+                    UpdateActionCard(
+                        status = displayStatus,
+                        info = info,
+                        isNewer = UpdateManager.isNewer(info.version, currentVersion),
+                        onDownload = { startDownload(info) },
+                        onInstall = { file -> openInstaller(info, file) },
+                        onOpenSettings = { UpdateManager.openInstallPermissionSettings(context) },
+                        onOpenBrowser = {
+                            openExternalBrowser(
+                                context,
+                                info.releaseUrl.ifBlank { info.apkUrl }
+                            )
+                        }
+                    )
+                }
+
+                StatusBlock(
+                    status = status,
+                    onOpenSettings = { UpdateManager.openInstallPermissionSettings(context) }
+                )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -250,7 +334,7 @@ fun VersionDialog(onClose: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = { openLink(context, UpdateManager.RELEASES_URL) }) {
+                    TextButton(onClick = { openExternalBrowser(context, UpdateManager.RELEASES_URL) }) {
                         Text("Все релизы")
                     }
                 }
@@ -303,7 +387,114 @@ fun VersionDialog(onClose: () -> Unit) {
 }
 
 @Composable
-private fun StatusBlock(status: VersionStatus, onOpenSettings: () -> Unit) {
+private fun UpdateActionCard(
+    status: VersionStatus,
+    info: UpdateManager.UpdateInfo,
+    isNewer: Boolean,
+    onDownload: () -> Unit,
+    onInstall: (File) -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenBrowser: () -> Unit,
+) {
+    val downloading = status is VersionStatus.Downloading
+    val progress = (status as? VersionStatus.Downloading)?.progress ?: 0f
+    val needsPermission = status is VersionStatus.NeedsPermission
+
+    Surface(
+        shape = ChangelogShape,
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.SystemUpdate,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (isNewer) "Доступна версия ${info.version}" else "Версия ${info.version}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        if (isNewer) {
+                            "Скачайте APK и установите поверх текущей версии"
+                        } else {
+                            "Последний релиз. Можно скачать и переустановить."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+
+            if (status is VersionStatus.Downloading) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "Загрузка: ${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+
+            if (needsPermission) {
+                Text(
+                    "Нужно разрешить установку приложений из этого источника.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onOpenSettings, modifier = Modifier.weight(1f)) {
+                        Text("Разрешить")
+                    }
+                    val file = (status as? VersionStatus.NeedsPermission)?.file
+                    if (file != null) {
+                        Button(onClick = { onInstall(file) }, modifier = Modifier.weight(1f)) {
+                            Text("Установить")
+                        }
+                    }
+                }
+            }
+
+            Button(
+                onClick = onDownload,
+                enabled = !downloading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    when {
+                        downloading -> "Загрузка обновления…"
+                        status is VersionStatus.InstallerOpened -> "Открыть установщик снова"
+                        else -> "Скачать и установить обновление"
+                    }
+                )
+            }
+            OutlinedButton(onClick = onOpenBrowser, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Открыть в браузере")
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBlock(
+    status: VersionStatus,
+    onOpenSettings: () -> Unit,
+) {
     Surface(
         shape = ChangelogShape,
         color = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -318,7 +509,7 @@ private fun StatusBlock(status: VersionStatus, onOpenSettings: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium
                 )
                 VersionStatus.Checking -> StatusRow("Проверка обновлений…")
-                VersionStatus.Downloading -> StatusRow("Загрузка обновления…")
+                is VersionStatus.Downloading -> StatusRow("Загрузка APK… ${(status.progress * 100).toInt()}%")
                 VersionStatus.UpToDate -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Default.CheckCircle,
@@ -334,7 +525,11 @@ private fun StatusBlock(status: VersionStatus, onOpenSettings: () -> Unit) {
                         fontWeight = FontWeight.Medium
                     )
                 }
-                VersionStatus.InstallerOpened -> Text(
+                is VersionStatus.Available -> Text(
+                    "Найдено обновление ${status.info.version}. Нажмите кнопку выше, чтобы скачать и установить APK.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                is VersionStatus.InstallerOpened -> Text(
                     "Установщик открыт. Подтвердите обновление в системе Android.",
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -535,4 +730,14 @@ private fun formatReleaseDate(raw: String): String {
         val parts = raw.substring(0, 10).split("-")
         "${parts[2]}.${parts[1]}.${parts[0]}"
     }.getOrDefault("")
+}
+
+private fun openExternalBrowser(context: Context, url: String) {
+    if (url.isBlank()) return
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
 }

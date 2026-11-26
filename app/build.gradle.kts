@@ -1,7 +1,19 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val cuteIdGithubToken = (
+    localProperties.getProperty("cuteid.github.token")
+        ?: System.getenv("CUTEID_GITHUB_TOKEN")
+        ?: ""
+).replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.cutetool.mestyachkovoe"
@@ -13,6 +25,8 @@ android {
         targetSdk = 35
         versionCode = 119
         versionName = "1.19"
+
+        buildConfigField("String", "CUTEID_GITHUB_TOKEN", "\"$cuteIdGithubToken\"")
 
         vectorDrawables {
             useSupportLibrary = true
@@ -36,6 +50,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

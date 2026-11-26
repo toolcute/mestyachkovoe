@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -32,10 +31,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.cutetool.mestyachkovoe.data.*
 import kotlinx.coroutines.delay
@@ -62,14 +64,23 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
     var districtPickerOpen by remember { mutableStateOf(false) }
     var cuteToolOpen by remember { mutableStateOf(false) }
     var cacheDialogOpen by remember { mutableStateOf(false) }
-    var cutisOpen by remember { mutableStateOf(false) }
     var favoritesOpen by remember { mutableStateOf(false) }
     var refreshTick by remember { mutableIntStateOf(0) }
+    var cidPollTick by remember { mutableIntStateOf(0) }
     var forceNextLoad by remember { mutableStateOf(false) }
     var loadId by remember { mutableIntStateOf(0) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val lifecycleOwner = LocalLifecycleOwner.current
     val savedTitles = remember(settings.savedPosts) {
         settings.savedPosts.map { it.key }.toSet()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) cidPollTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LaunchedEffect(settings.federalDistrict) {
@@ -93,11 +104,6 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         return
     }
 
-    if (cutisOpen) {
-        CutisScreen(onExit = { cutisOpen = false })
-        return
-    }
-
     fun reload() {
         forceNextLoad = true
         refreshTick++
@@ -117,12 +123,12 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
         }
     }
 
-    // While CID auth is pending, poll Telegram every 2.5 seconds and merge the cloud data.
-    LaunchedEffect(settings.cidSession, settings.cidLinked) {
+    // While CID auth is pending, poll GitHub users.json every 2 seconds (also refreshed in onResume).
+    LaunchedEffect(settings.cidSession, settings.cidLinked, cidPollTick) {
         val session = settings.cidSession
         if (settings.cidLinked || session.isNullOrBlank()) return@LaunchedEffect
-        repeat(80) {
-            delay(2500)
+        repeat(150) {
+            delay(2000)
             val auth = runCatching { CuteIdRepository.pollForAuth(session) }.getOrNull()
                 ?: return@repeat
             settingsRepo.mergeCidData(auth)
@@ -207,10 +213,6 @@ fun MestyachkovoeApp(settings: UserSettings, settingsRepo: SettingsRepository) {
                         onCuteTool = {
                             scope.launch { drawerState.close() }
                             cuteToolOpen = true
-                        },
-                        onCutis = {
-                            scope.launch { drawerState.close() }
-                            cutisOpen = true
                         },
                         onCache = {
                             scope.launch { drawerState.close() }
@@ -571,7 +573,6 @@ fun SettingsSheet(
     onVersion: () -> Unit,
     onDistrict: () -> Unit,
     onCuteTool: () -> Unit,
-    onCutis: () -> Unit,
     onCache: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -591,25 +592,6 @@ fun SettingsSheet(
                 SegButton("Ч/Б", settings.themeMode == ThemeMode.MONO) { onTheme(ThemeMode.MONO) }
             }
             SegButton("Светлая", settings.themeMode == ThemeMode.LIGHT) { onTheme(ThemeMode.LIGHT) }
-        }
-        Divider()
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onCutis)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Pets, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Cutis — игра", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Тамагочи-уголок: Кути, у.е. и мини-игры",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
         Divider()
         Row(
