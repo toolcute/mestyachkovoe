@@ -19,8 +19,8 @@ enum class FederalDistrict(
     SIBERIA("Сибирь"),
     MOSCOW_OBLAST("Московская область"),
     SOUTH("Юг России"),
-    NORTH_CAUCASUS("Северный Кавказ", DistrictStatus.SOON, false),
-    NORTHWEST("СЗФО", DistrictStatus.TESTING),
+    NORTH_CAUCASUS("Северный Кавказ"),
+    NORTHWEST("СЗФО"),
     FAR_EAST("Дальний Восток");
 
     val regions: List<Region>
@@ -120,7 +120,16 @@ enum class Region(val title: String) {
     JEWISH_AO("Еврейская АО"),
     KAMCHATKA("Камчатский край"),
     CHUKOTKA("Чукотский АО"),
-    SAKHA("Якутия")
+    SAKHA("Якутия"),
+
+    // Северный Кавказ
+    DAGESTAN("Дагестан"),
+    CHECHNYA("Чечня"),
+    INGUSHETIA("Ингушетия"),
+    KABARDINO_BALKARIA("Кабардино-Балкария"),
+    KARACHAY_CHERKESSIA("Карачаево-Черкесия"),
+    NORTH_OSETIA("Северная Осетия"),
+    STAVROPOL("Ставропольский край")
 }
 
 val Region.district: FederalDistrict
@@ -209,6 +218,14 @@ val Region.district: FederalDistrict
         Region.KAMCHATKA,
         Region.CHUKOTKA,
         Region.SAKHA -> FederalDistrict.FAR_EAST
+
+        Region.DAGESTAN,
+        Region.CHECHNYA,
+        Region.INGUSHETIA,
+        Region.KABARDINO_BALKARIA,
+        Region.KARACHAY_CHERKESSIA,
+        Region.NORTH_OSETIA,
+        Region.STAVROPOL -> FederalDistrict.NORTH_CAUCASUS
     }
 
 enum class ThemeMode(val title: String) { MONET("Monet"), MONO("Ч/Б (Тёмная)"), LIGHT("Светлая") }
@@ -322,6 +339,11 @@ object Sources {
         FeedSource("ProPerm", "https://properm.ru/rss/", Region.PERM),
         FeedSource("Ufa1.ru", "https://ufa1.ru/rss/", Region.BASHKORTOSTAN),
         FeedSource("1743.ru", "https://1743.ru/rss/", Region.ORENBURG),
+        FeedSource("Вечерние ведомости", "https://veved.ru/rss", Region.SVERDLOVSK),
+        FeedSource("Тюменская линия", "https://t-l.ru/rss", Region.TYUMEN),
+        FeedSource("СургутИнформТВ", "https://sitv.ru/rss", Region.KHMAO),
+        FeedSource("Ямал-Медиа", "https://yamal-media.ru/rss", Region.YANAO),
+        FeedSource("Урал56.Ру", "https://ural56.ru/rss", Region.ORENBURG),
 
         // Центральная Россия (без Москвы и Московской области)
         FeedSource("АиФ Тверь", "https://tver.aif.ru/rss/all.php", Region.TVER, FederalDistrict.CENTRAL),
@@ -582,6 +604,50 @@ object Sources {
         FeedSource("Google Новости: Симферополь", googleNews("Симферополь новости"), Region.CRIMEA, FederalDistrict.SOUTH),
         FeedSource("Google Новости: Майкоп", googleNews("Майкоп новости"), Region.ADYGEYA, FederalDistrict.SOUTH),
         FeedSource("Google Новости: Элиста", googleNews("Элиста новости"), Region.KALMYKIA, FederalDistrict.SOUTH),
+
+        // Северный Кавказ
+        FeedSource("РИА Дагестан", "https://riadagestan.ru/rss/", Region.DAGESTAN, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Черновик", "https://chernovik.net/rss", Region.DAGESTAN, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Молодёжь Дагестана", "https://md-gazeta.ru/rss", Region.DAGESTAN, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Махачкалинские известия", "https://mahachkala-news.ru/rss", Region.DAGESTAN, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Дербент", "https://derbent.ru/rss", Region.DAGESTAN, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Дагестан", googleNews("Дагестан новости"), Region.DAGESTAN, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Чечня сегодня", "https://chechnyatoday.com/rss", Region.CHECHNYA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Грозный-информ", "https://grozny-inform.ru/rss", Region.CHECHNYA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Чеченская Республика", "https://chechnya.gov.ru/rss", Region.CHECHNYA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Чечня", googleNews("Чечня новости"), Region.CHECHNYA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Ингушетия", "https://ingushetia.ru/rss", Region.INGUSHETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Магас", "https://magas.ru/rss", Region.INGUSHETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Ингушетия сегодня", "https://ingushetiya.ru/rss", Region.INGUSHETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Ингушетия", googleNews("Ингушетия новости"), Region.INGUSHETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Кабардино-Балкарская правда", "https://kbpravda.ru/rss", Region.KABARDINO_BALKARIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Нальчик", "https://nalchik.ru/rss", Region.KABARDINO_BALKARIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Кавказ Сегодня", "https://kavtoday.ru/rss", Region.KABARDINO_BALKARIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Кабардино-Балкария", googleNews("Кабардино-Балкария новости"), Region.KABARDINO_BALKARIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Карачаево-Черкесия", "https://kchr.ru/rss", Region.KARACHAY_CHERKESSIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Черкесск", "https://cherkessk.ru/rss", Region.KARACHAY_CHERKESSIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("День Республики", "https://dayrespubliki.ru/rss", Region.KARACHAY_CHERKESSIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Карачаево-Черкесия", googleNews("Карачаево-Черкесия новости"), Region.KARACHAY_CHERKESSIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Осетия-Ирыстон", "https://iryston.tv/rss", Region.NORTH_OSETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Владикавказ", "https://vladikavkaz.ru/rss", Region.NORTH_OSETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("15-й регион", "https://15region.ru/rss", Region.NORTH_OSETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Алания", "https://alania.ru/rss", Region.NORTH_OSETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Северная Осетия", googleNews("Северная Осетия новости"), Region.NORTH_OSETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Ставропольская правда", "https://stapravda.ru/rss", Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("КП Ставрополь", "https://stavropol.kp.ru/rss/all.xml", Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("АиФ Ставрополь", "https://stavropol.aif.ru/rss/all.php", Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Победа26", "https://pobeda26.ru/rss", Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Блокнот Ставрополь", "https://bloknot-stavropol.ru/rss_news.php", Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("ГТРК Ставрополье", "https://stavropolye.tv/rss", Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Ставропольский край", googleNews("Ставропольский край новости"), Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Кавказский узел", "https://www.kavkaz-uzel.eu/rss", Region.ALL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Это Кавказ", "https://etokavkaz.ru/rss", Region.ALL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Регион online", "https://regiononline.ru/rss", Region.ALL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Северный Кавказ", googleNews("Северный Кавказ новости"), Region.ALL, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Махачкала", googleNews("Махачкала новости"), Region.DAGESTAN, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Грозный", googleNews("Грозный новости"), Region.CHECHNYA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Владикавказ", googleNews("Владикавказ новости"), Region.NORTH_OSETIA, FederalDistrict.NORTH_CAUCASUS),
+        FeedSource("Google Новости: Ставрополь", googleNews("Ставрополь новости"), Region.STAVROPOL, FederalDistrict.NORTH_CAUCASUS),
 
         // Дальний Восток
         FeedSource("Вести Приморье", "https://vestiprim.ru/rss", Region.PRIMORSKY, FederalDistrict.FAR_EAST),

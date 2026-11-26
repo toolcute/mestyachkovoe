@@ -37,7 +37,7 @@ object CuteIdRepository {
     private val GITHUB_TOKEN = BuildConfig.CUTEID_GITHUB_TOKEN
     private const val GITHUB_ACCEPT = "application/vnd.github+json"
     private const val SESSION_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-    private const val USER_AGENT = "Mestyachkovoe/1.20 (+https://github.com/toolcute/mestyachkovoe)"
+    private const val USER_AGENT = "Mestyachkovoe/1.21 (+https://github.com/toolcute/mestyachkovoe)"
 
     private val nicknameRegex = Regex("^[a-zA-Z]{4,9}$")
     private val syncMutex = Mutex()

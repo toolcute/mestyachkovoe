@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -375,11 +374,19 @@ fun ExpressiveTopBar(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            TopBarAction(Icons.Default.Favorite, "Любимое", onFavorites)
-            Spacer(Modifier.width(6.dp))
-            TopBarAction(Icons.Default.Search, "Поиск по новостям", onSearch)
-            Spacer(Modifier.width(6.dp))
-            TopBarAction(Icons.Default.Refresh, "Обновить", onRefresh)
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Row(
+                    Modifier.padding(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TopBarPillAction(Icons.Default.Favorite, "Любимое", onFavorites)
+                    TopBarPillAction(Icons.Default.Search, "Поиск по новостям", onSearch)
+                    TopBarPillAction(Icons.Default.Refresh, "Обновить", onRefresh)
+                }
+            }
         }
     }
 }
@@ -395,6 +402,25 @@ private fun TopBarAction(
         modifier = Modifier
             .size(40.dp)
             .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun TopBarPillAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(38.dp)
     ) {
         Icon(
             icon,
@@ -444,15 +470,6 @@ private fun RegionChip(title: String, selected: Boolean, onClick: () -> Unit) {
                 maxLines = 1
             )
         },
-        leadingIcon = if (selected) {
-            {
-                Icon(
-                    Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        } else null,
         colors = FilterChipDefaults.filterChipColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -23,8 +23,8 @@ android {
         applicationId = "com.cutetool.mestyachkovoe"
         minSdk = 26
         targetSdk = 35
-        versionCode = 120
-        versionName = "1.20"
+        versionCode = 121
+        versionName = "1.21"
 
         buildConfigField("String", "CUTEID_GITHUB_TOKEN", "\"$cuteIdGithubToken\"")
 

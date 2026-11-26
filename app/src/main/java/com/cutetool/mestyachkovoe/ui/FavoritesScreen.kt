@@ -314,7 +314,7 @@ private fun CidAccountSection(
                     Surface(
                         shape = RoundedCornerShape(30.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        border = BorderStroke(4.dp, MaterialTheme.colorScheme.surfaceContainerLow),
+                        border = BorderStroke(4.dp, MaterialTheme.colorScheme.primary),
                         modifier = Modifier.size(88.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -328,13 +328,20 @@ private fun CidAccountSection(
                     }
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            displayName,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                displayName,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
